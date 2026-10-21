@@ -14,6 +14,8 @@ def offline_defaults(monkeypatch):
     # Never make billable calls from the ordinary test suite.
     monkeypatch.setenv("MODEL_PROVIDER", "baseline")
     monkeypatch.setenv("EMBEDDING_PROVIDER", "baseline")
+    # Keep previous paid-release contracts explicit; demo-release tests enable it.
+    monkeypatch.setenv("DEMO_RELEASE", "false")
     for key in (
         "SMTP_HOST",
         "SMTP_FROM",

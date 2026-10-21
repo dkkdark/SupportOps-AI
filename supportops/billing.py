@@ -113,7 +113,9 @@ def counter(db, org_id, period, metric):
     )
 
 
-def consume(db, org_id, metric, amount=1):
+def consume(db, org_id, metric, amount=1, config=None):
+    if config and config.demo_release and metric != "credits":
+        return {}
     plan = entitlement(db, org_id)
     if plan["plan"] == "demo":
         return plan
@@ -140,7 +142,11 @@ def consume(db, org_id, metric, amount=1):
     return plan
 
 
-def reserve(db, config, org_id, amount=None):
+def reserve(db, config, org_id, amount=None, user_id=None):
+    if config.demo_release:
+        from supportops.demo_budget import reserve as demo_reserve
+
+        return demo_reserve(db, config, org_id, user_id, amount)
     if amount is None:
         entitlement_data = entitlement(db, org_id)
         counter(db, org_id, entitlement_data["period"], "credits")
@@ -172,6 +178,12 @@ def settle(sessions, reservation_id, usage, uncertain=False):
         r = db.get(CreditReservation, reservation_id)
         if not r or r.settled:
             return
+        if r.demo_reserved_microusd is not None:
+            from supportops.demo_budget import settle as demo_settle
+
+            demo_settle(db, r, usage, uncertain)
+            db.commit()
+            return
         actual = (
             r.reserved
             if uncertain
@@ -200,6 +212,14 @@ def settle(sessions, reservation_id, usage, uncertain=False):
                 .values(value=UsageCounter.value - (r.reserved - actual))
             )
         db.commit()
+
+
+def reservation_budget(row):
+    return (
+        row.demo_reserved_microusd / 1_000_000
+        if row.demo_reserved_microusd is not None
+        else row.reserved * CREDIT_USD
+    )
 
 
 def billing_state(db, config, org_id):
@@ -273,6 +293,8 @@ def billing_router(auth, sessions, config, transport=None):
 
     @router.get("/plans")
     def plans():
+        if config.demo_release:
+            return []
         return [
             {
                 "id": id,
@@ -291,10 +313,18 @@ def billing_router(auth, sessions, config, transport=None):
     @router.get("/billing")
     def state(actor: Identity = Depends(auth.current)):
         with sessions() as db:
+            if config.demo_release:
+                from supportops.demo_budget import state as demo_state
+
+                return demo_state(db, config, actor.user_id)
             return billing_state(db, config, actor.organization_id)
 
     @router.post("/billing/checkout")
     def checkout(body: CheckoutInput, actor: Identity = Depends(auth.admin)):
+        if config.demo_release:
+            raise HTTPException(
+                403, "Purchasing is not available during the demo release."
+            )
         auth.ensure_verified(actor)
         from supportops.launch import legal_ready
 
@@ -393,8 +423,26 @@ def billing_router(auth, sessions, config, transport=None):
             db.commit()
             return {"url": url}
 
+    @router.post("/demo/launch-notification")
+    def launch_notification(actor: Identity = Depends(auth.current)):
+        if not config.demo_release:
+            raise HTTPException(404, "Demo notification signup is unavailable.")
+        from supportops.demo_budget import account
+
+        with sessions() as db:
+            row = account(db, config, actor.user_id)
+            if not row.launch_email_requested_at:
+                row.launch_email_requested_at = utcnow()
+                row.notification_reason = "launch_requested"
+            db.commit()
+        return {"launch_email_requested": True}
+
     @router.post("/billing/portal")
     def portal(actor: Identity = Depends(auth.admin)):
+        if config.demo_release:
+            raise HTTPException(
+                403, "Purchasing is not available during the demo release."
+            )
         if actor.role != "owner":
             raise HTTPException(403, "Only the workspace owner can manage billing.")
         with sessions() as db:
@@ -417,6 +465,8 @@ def billing_router(auth, sessions, config, transport=None):
 
     @router.post("/webhooks/stripe")
     async def webhook(request: Request):
+        if config.demo_release:
+            raise HTTPException(503, "Payments are disabled during the demo release.")
         if not config.stripe_webhook_secret:
             raise HTTPException(503, "Payment webhooks are not configured.")
         raw = await request.body()
@@ -518,7 +568,9 @@ def billing_router(auth, sessions, config, transport=None):
     return router
 
 
-def seat_available(db, org_id, email=None):
+def seat_available(db, org_id, email=None, config=None):
+    if config and config.demo_release:
+        return
     from sqlalchemy import func
     from supportops.db import Membership, Invitation
 

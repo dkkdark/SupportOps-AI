@@ -55,17 +55,23 @@ def launch_router(auth, sessions, config):
                     "ready": bool(config.smtp_host and config.smtp_from),
                     "action": "Configure SMTP and test verification/password recovery with your own mailbox.",
                 },
-                {
-                    "name": "Paid subscriptions",
-                    "ready": bool(
-                        config.stripe_secret_key
-                        and config.stripe_webhook_secret
-                        and config.stripe_starter_price_id
-                        and config.stripe_growth_price_id
-                        and config.stripe_scale_price_id
-                    ),
-                    "action": "Configure Stripe products, prices, webhook signing secret and Customer Portal.",
-                },
+                *(
+                    []
+                    if config.demo_release
+                    else [
+                        {
+                            "name": "Paid subscriptions",
+                            "ready": bool(
+                                config.stripe_secret_key
+                                and config.stripe_webhook_secret
+                                and config.stripe_starter_price_id
+                                and config.stripe_growth_price_id
+                                and config.stripe_scale_price_id
+                            ),
+                            "action": "Configure Stripe products, prices, webhook signing secret and Customer Portal.",
+                        },
+                    ]
+                ),
                 {
                     "name": "Public-form spam protection",
                     "ready": bool(
@@ -89,7 +95,7 @@ def launch_router(auth, sessions, config):
                 403, "Only the workspace owner can export the business data."
             )
         with sessions() as db:
-            data = {"business": actor.organization, "schema_version": "003"}
+            data = {"business": actor.organization, "schema_version": "004"}
             for cls, label in [
                 (KnowledgeSource, "knowledge"),
                 (RequestType, "request_types"),
@@ -147,7 +153,7 @@ def launch_router(auth, sessions, config):
                 ),
                 (
                     "Payments and email",
-                    "Stripe handles hosted checkout and subscription management; this application does not receive full payment-card data. A configured email provider delivers verification and recovery messages. Public forms can use Cloudflare Turnstile for spam protection.",
+                    "This demo does not offer payments. Future paid releases can use Stripe for hosted checkout and subscription management; this application does not receive full payment-card data. A configured email provider delivers verification and recovery messages. Public forms can use Cloudflare Turnstile for spam protection.",
                 ),
                 (
                     "Business control and requests",
@@ -161,16 +167,24 @@ def launch_router(auth, sessions, config):
                     "SupportOps provides business request intake, knowledge retrieval, AI proposals, routing and human review. Workspace owners are responsible for authorized team access and the information they submit.",
                 ),
                 (
-                    "Plans and AI credits",
-                    "Subscriptions apply per workspace. Credits cover model use including indexing and verification; use varies with token volume and agent work. A temporary reservation is reconciled after processing. Unknown provider charges may require reconciliation. Trial credits are one-time; paid credits renew with the paid period, without rollover or automatic overage charges.",
+                    "Demo AI allowance"
+                    if config.demo_release
+                    else "Plans and AI credits",
+                    f"This is a demo release with a one-time ${config.demo_ai_budget_usd:.2f} AI allowance per user account across all workspaces. Calls to paid AI models, including indexing and verification, use this allowance. Paid AI operations pause when the allowance is used; manual workspace features remain available. Model costs use configured token prices. Unknown provider charges retain a reservation for reconciliation. Purchasing is not currently available."
+                    if config.demo_release
+                    else "Subscriptions apply per workspace. Credits cover model use including indexing and verification; use varies with token volume and agent work. A temporary reservation is reconciled after processing. Unknown provider charges may require reconciliation.",
                 ),
                 (
                     "Human decisions",
                     "AI outputs can be incomplete or incorrect. An authorized person must review results before relying on them or taking external actions. The service does not automatically send replies, issue payments, approve sensitive decisions or change external business records.",
                 ),
                 (
-                    "Subscriptions and cancellation",
-                    "Owners use the configured Stripe Customer Portal to manage a subscription. The operator must publish cancellation timing, refund rules, support commitments, taxes and applicable mandatory rights before accepting paid customers.",
+                    "Launch notifications"
+                    if config.demo_release
+                    else "Subscriptions and cancellation",
+                    "When an account reaches its demo AI limit, or its user requests a launch notification, the account is marked for an email when purchasing becomes available. No launch email has been sent automatically. Contact the operator to withdraw a notification request."
+                    if config.demo_release
+                    else "Owners use the configured Stripe Customer Portal to manage a subscription. The operator must publish cancellation timing, refund rules, support commitments, taxes and applicable mandatory rights before accepting paid customers.",
                 ),
                 (
                     "Operator details and legal terms",

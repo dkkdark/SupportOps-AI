@@ -274,6 +274,8 @@ def create_app(
     def public_config():
         return {
             "mode": "api",
+            "demo_release": config.demo_release,
+            "demo_ai_budget_usd": config.demo_ai_budget_usd,
             "provider": config.model_provider,
             "auth_required": True,
             "faults_enabled": config.fault_injection_enabled,
@@ -344,7 +346,7 @@ def create_app(
                     ):
                         raise HTTPException(409, "idempotency_key_reused")
                     return ticket_dict(old)
-            consume(db, actor.organization_id, "requests")
+            consume(db, actor.organization_id, "requests", config=config)
             item = Ticket(
                 organization_id=actor.organization_id,
                 id="SO-" + uuid.uuid4().hex[:8].upper(),
@@ -437,7 +439,7 @@ def create_app(
             ):
                 raise HTTPException(409, "analysis_in_progress")
             reservation_id = (
-                reserve(db, config, actor.organization_id)
+                reserve(db, config, actor.organization_id, user_id=actor.user_id)
                 if actor.organization["workflow_mode"] == "knowledge"
                 and config.model_provider == "openai"
                 else None
@@ -457,9 +459,12 @@ def create_app(
             db.commit()
             db.refresh(t)
             thread = f"{actor.organization_id}:{id}:{t.revision}"
+            from supportops.billing import reservation_budget
+
             initial = {
-                "credit_budget_usd": db.get(CreditReservation, reservation_id).reserved
-                * 0.005
+                "credit_budget_usd": reservation_budget(
+                    db.get(CreditReservation, reservation_id)
+                )
                 if reservation_id
                 else config.agent_provider_cost_limit,
                 "organization_id": actor.organization_id,

@@ -397,7 +397,7 @@ def intake_router(auth, sessions, config, web_path):
                             "The external request ID was already used with different content.",
                         )
                     return {"received": True, "reference": old.id, "duplicate": True}
-            consume(db, c.organization_id, "requests")
+            consume(db, c.organization_id, "requests", config=config)
             item = Ticket(
                 organization_id=c.organization_id,
                 id="REQ-" + uuid.uuid4().hex[:10].upper(),

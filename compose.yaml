@@ -38,6 +38,8 @@ services:
       DATABASE_URL: postgresql+psycopg://supportops:local-demo-only@db:5432/supportops
       ORDERS_API_URL: http://orders:8000
       MODEL_PROVIDER: ${MODEL_PROVIDER:-openai}
+      DEMO_RELEASE: ${DEMO_RELEASE:-true}
+      DEMO_AI_BUDGET_USD: ${DEMO_AI_BUDGET_USD:-5}
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-openai}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}

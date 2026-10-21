@@ -150,7 +150,7 @@ def render_template(body, values):
     return re.sub(r"{{\s*([a-z_]+)\s*}}", lambda m: values.get(m[1], ""), body)
 
 
-def publish(db, actor, body, file_name=None):
+def publish(db, actor, body, file_name=None, config=None):
     db.scalar(
         select(Organization)
         .where(Organization.id == actor.organization_id)
@@ -221,7 +221,11 @@ def publish(db, actor, body, file_name=None):
         )
         or 0
     )
-    if not limits["plan"] == "demo" and stored + len(pieces) > limits["chunks"]:
+    if (
+        not (config and config.demo_release)
+        and not limits["plan"] == "demo"
+        and stored + len(pieces) > limits["chunks"]
+    ):
         raise HTTPException(
             402,
             "Knowledge storage limit reached. Upgrade your plan before publishing more documents.",
@@ -310,7 +314,9 @@ def content_router(auth, sessions):
     def queue(db, actor, source_id, tasks):
         if actor.organization and actor.organization.get("is_demo"):
             return
-        job = enqueue(db, config, actor.organization_id, source_id)
+        job = enqueue(
+            db, config, actor.organization_id, source_id, user_id=actor.user_id
+        )
         db.commit()
         if job:
             tasks.add_task(
@@ -356,7 +362,7 @@ def content_router(auth, sessions):
     ):
         with sessions() as db:
             auth.ensure_verified(actor)
-            result = publish(db, actor, body)
+            result = publish(db, actor, body, config=config)
             db.commit()
             queue(db, actor, result["id"], tasks)
             return result
@@ -388,7 +394,7 @@ def content_router(auth, sessions):
             raise HTTPException(422, str(exc.errors()[0]["msg"]))
         with sessions() as db:
             auth.ensure_verified(actor)
-            result = publish(db, actor, body, name)
+            result = publish(db, actor, body, name, config=config)
             db.commit()
             queue(db, actor, result["id"], tasks)
             return result

@@ -7,6 +7,8 @@ from sqlalchemy import URL
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     app_env: str = "development"
+    demo_release: bool = True
+    demo_ai_budget_usd: float = Field(default=5.0, gt=0, le=100)
     session_days: int = 7
     allow_demo_signup: bool = False
     database_url: str = "sqlite:///./var/supportops.db"
@@ -69,6 +71,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def database_from_secret(self):
+        if self.demo_release and self.model_provider not in ("openai", "baseline"):
+            raise ValueError(
+                "Demo release requires the metered OpenAI agent or the free offline baseline"
+            )
         if (
             self.model_provider == "openai"
             and min(

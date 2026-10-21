@@ -16,6 +16,8 @@ resource "aws_ecs_cluster" "main" {
 locals {
   app_environment = [
     { name = "APP_ENV", value = "production" },
+    { name = "DEMO_RELEASE", value = "true" },
+    { name = "DEMO_AI_BUDGET_USD", value = "5" },
     { name = "FORWARDED_ALLOW_IPS", value = aws_vpc.main.cidr_block },
     { name = "ALLOW_DEMO_SIGNUP", value = "false" },
     { name = "SESSION_DAYS", value = "7" },

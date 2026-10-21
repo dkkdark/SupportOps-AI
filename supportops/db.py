@@ -309,6 +309,7 @@ class IndexJob(Base):
     profile: Mapped[str] = mapped_column(String(64), primary_key=True)
     status: Mapped[str] = mapped_column(String(20), default="pending")
     attempts: Mapped[int] = mapped_column(Integer, default=0)
+    requested_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
     error: Mapped[str | None] = mapped_column(String(160))
     input_tokens: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(
@@ -429,10 +430,29 @@ class CreditReservation(Base):
     reserved: Mapped[int] = mapped_column(Integer)
     charged: Mapped[int | None] = mapped_column(Integer)
     settled: Mapped[bool] = mapped_column(Boolean, default=False)
+    user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), index=True)
+    demo_reserved_microusd: Mapped[int | None] = mapped_column(Integer)
+    demo_charged_microusd: Mapped[int | None] = mapped_column(Integer)
     usage: Mapped[dict | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow
     )
+
+
+class DemoAccount(Base):
+    __tablename__ = "demo_accounts"
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    spent_microusd: Mapped[int] = mapped_column(Integer, default=0)
+    reserved_microusd: Mapped[int] = mapped_column(Integer, default=0)
+    limit_microusd: Mapped[int] = mapped_column(Integer, default=5_000_000)
+    limit_reached_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    launch_email_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    launch_email_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    notification_reason: Mapped[str | None] = mapped_column(String(60))
 
 
 class RecoveryToken(Base):

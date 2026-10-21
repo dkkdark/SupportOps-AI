@@ -540,7 +540,10 @@ class Auth:
                     from supportops.billing import seat_available
 
                     seat_available(
-                        db, actor.organization_id, db.get(User, user_id).email
+                        db,
+                        actor.organization_id,
+                        db.get(User, user_id).email,
+                        config=self.config,
                     )
                 member.role, member.active = body.role, body.active
                 audit(
@@ -579,7 +582,9 @@ class Auth:
             with self.sessions() as db:
                 from supportops.billing import seat_available
 
-                seat_available(db, actor.organization_id, body.email)
+                seat_available(
+                    db, actor.organization_id, body.email, config=self.config
+                )
                 member = db.scalar(
                     select(Membership)
                     .join(User, User.id == Membership.user_id)
@@ -685,7 +690,9 @@ class Auth:
                     db.flush()
                 from supportops.billing import seat_available
 
-                seat_available(db, invitation.organization_id, body.email)
+                seat_available(
+                    db, invitation.organization_id, body.email, config=self.config
+                )
                 # Single-use claim is atomic, even for simultaneous acceptance requests.
                 claimed = db.execute(
                     update(Invitation)

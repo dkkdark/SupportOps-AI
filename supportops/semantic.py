@@ -5,9 +5,11 @@ import hashlib
 import math
 from sqlalchemy import select, update, cast
 from pgvector.sqlalchemy import Vector
+from fastapi import HTTPException
 from supportops.db import (
     Organization,
     ChunkEmbedding,
+    CreditReservation,
     Document,
     IndexJob,
     KnowledgeSource,
@@ -15,7 +17,7 @@ from supportops.db import (
 )
 from supportops.openai_client import ModelError, OpenAIClient
 from supportops.retrieval import terms, serialize_document
-from supportops.billing import reserve, settle, CREDIT_USD
+from supportops.billing import reserve, settle, reservation_budget, CREDIT_USD
 
 
 def profile(config):
@@ -32,7 +34,7 @@ def text_hash(d):
     return hashlib.sha256(embedding_text(d).encode()).hexdigest()
 
 
-def enqueue(db, config, org_id, source_id):
+def enqueue(db, config, org_id, source_id, user_id=None):
     if config.embedding_provider != "openai":
         return None
     key = (org_id, source_id, profile(config))
@@ -45,6 +47,8 @@ def enqueue(db, config, org_id, source_id):
             status="pending",
         )
         db.add(job)
+    if user_id and job.status != "indexing":
+        job.requested_by = user_id
     return job
 
 
@@ -81,6 +85,7 @@ def index_source(config, sessions, org_id, source_id, transport=None):
         db.commit()
         if not claimed:
             return
+        user_id = db.get(IndexJob, key, populate_existing=True).requested_by
         docs = db.scalars(
             select(Document).where(
                 Document.organization_id == org_id, Document.source_id == source_id
@@ -106,9 +111,17 @@ def index_source(config, sessions, org_id, source_id, transport=None):
                     )
                     + 1,
                 )
-                reservation_id = reserve(db, config, org_id, amount)
+                reservation_id = reserve(db, config, org_id, amount, user_id=user_id)
+                budget = (
+                    reservation_budget(db.get(CreditReservation, reservation_id))
+                    if reservation_id
+                    else config.agent_provider_cost_limit
+                )
                 db.commit()
-            client = OpenAIClient(config, transport)
+            client = OpenAIClient(
+                config.model_copy(update={"agent_provider_cost_limit": budget}),
+                transport,
+            )
             vectors = client.embeddings([embedding_text(d) for d in pending])
             with sessions() as db:
                 for d, vector in zip(pending, vectors):
@@ -144,7 +157,11 @@ def index_source(config, sessions, org_id, source_id, transport=None):
             if job:
                 job.status = "failed"
                 job.error = (
-                    exc.code if isinstance(exc, ModelError) else "indexing_failed"
+                    exc.code
+                    if isinstance(exc, ModelError)
+                    else "demo_budget_exhausted"
+                    if isinstance(exc, HTTPException) and exc.status_code == 429
+                    else "indexing_failed"
                 )
                 job.updated_at = utcnow()
                 db.commit()
