@@ -1,144 +1,144 @@
 [
   {
     "id": "1042",
-    "customer": "Анна Смирнова",
+    "customer": "Anna Smirnova",
     "status": "delayed",
     "total": 4890,
     "currency": "RUB",
     "placed_at": "2026-10-16",
     "expected_at": "2026-10-20",
     "delivered_at": null,
-    "carrier": "СДЭК",
+    "carrier": "CDEK",
     "tracking": "SYNTH1042RU",
     "items": [
       {
-        "title": "Настольная лампа Kanso",
+        "title": "Kanso desk lamp",
         "quantity": 1
       }
     ]
   },
   {
     "id": "1043",
-    "customer": "Михаил Волков",
+    "customer": "Michael Volkov",
     "status": "delivered",
     "total": 3200,
     "currency": "RUB",
     "placed_at": "2026-10-16",
     "expected_at": "2026-10-20",
     "delivered_at": "2026-10-19",
-    "carrier": "СДЭК",
+    "carrier": "CDEK",
     "tracking": "SYNTH1043RU",
     "items": [
       {
-        "title": "Керамическая ваза Forma",
+        "title": "Forma ceramic vase",
         "quantity": 1
       }
     ]
   },
   {
     "id": "1044",
-    "customer": "Дарья Козлова",
+    "customer": "Daria Kozlova",
     "status": "processing",
     "total": 6490,
     "currency": "RUB",
     "placed_at": "2026-10-16",
     "expected_at": "2026-10-20",
     "delivered_at": null,
-    "carrier": "СДЭК",
+    "carrier": "CDEK",
     "tracking": null,
     "items": [
       {
-        "title": "Плед Soft cotton",
+        "title": "Soft cotton throw",
         "quantity": 1
       }
     ]
   },
   {
     "id": "1045",
-    "customer": "Алексей Морозов",
+    "customer": "Alex Morozov",
     "status": "delivered",
     "total": 2780,
     "currency": "RUB",
     "placed_at": "2026-10-16",
     "expected_at": "2026-10-20",
     "delivered_at": "2026-10-19",
-    "carrier": "СДЭК",
+    "carrier": "CDEK",
     "tracking": "SYNTH1045RU",
     "items": [
       {
-        "title": "Набор чашек Line",
+        "title": "Line ceramic cup set",
         "quantity": 1
       }
     ]
   },
   {
     "id": "1046",
-    "customer": "Елена Соколова",
+    "customer": "Elena Sokolova",
     "status": "shipped",
     "total": 3590,
     "currency": "RUB",
     "placed_at": "2026-10-16",
     "expected_at": "2026-10-20",
     "delivered_at": null,
-    "carrier": "СДЭК",
+    "carrier": "CDEK",
     "tracking": "SYNTH1046RU",
     "items": [
       {
-        "title": "Органайзер Oak",
+        "title": "Oak desk organizer",
         "quantity": 1
       }
     ]
   },
   {
     "id": "1047",
-    "customer": "Иван Петров",
+    "customer": "Ivan Petrov",
     "status": "delivered",
     "total": 5990,
     "currency": "RUB",
     "placed_at": "2026-10-16",
     "expected_at": "2026-10-20",
     "delivered_at": "2026-10-19",
-    "carrier": "СДЭК",
+    "carrier": "CDEK",
     "tracking": "SYNTH1047RU",
     "items": [
       {
-        "title": "Настенные часы Mono",
+        "title": "Mono wall clock",
         "quantity": 1
       }
     ]
   },
   {
     "id": "1048",
-    "customer": "Мария Новикова",
+    "customer": "Maria Novikova",
     "status": "processing",
     "total": 2490,
     "currency": "RUB",
     "placed_at": "2026-10-16",
     "expected_at": "2026-10-20",
     "delivered_at": null,
-    "carrier": "СДЭК",
+    "carrier": "CDEK",
     "tracking": null,
     "items": [
       {
-        "title": "Поднос Ash",
+        "title": "Ash serving tray",
         "quantity": 1
       }
     ]
   },
   {
     "id": "1049",
-    "customer": "Павел Орлов",
+    "customer": "Paul Orlov",
     "status": "shipped",
     "total": 4200,
     "currency": "RUB",
     "placed_at": "2026-10-16",
     "expected_at": "2026-10-20",
     "delivered_at": null,
-    "carrier": "СДЭК",
+    "carrier": "CDEK",
     "tracking": "SYNTH1049RU",
     "items": [
       {
-        "title": "Льняная скатерть",
+        "title": "Linen tablecloth",
         "quantity": 1
       }
     ]

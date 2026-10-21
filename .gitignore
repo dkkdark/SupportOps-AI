@@ -1,10 +1,12 @@
 .venv/
+node_modules/
 __pycache__/
 *.pyc
 .pytest_cache/
 .coverage
 htmlcov/
 .env
+.env.k8s
 var/
 reports/
 *.db*

@@ -1,0 +1,12 @@
+{
+  "name": "supportops-ai-workspace",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "format": "prettier --write 'supportops/web/*.{js,css,html}'",
+    "check:format": "prettier --check 'supportops/web/*.{js,css,html}'"
+  },
+  "devDependencies": {
+    "prettier": "3.5.3"
+  }
+}
