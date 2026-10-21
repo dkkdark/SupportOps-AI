@@ -61,6 +61,8 @@ class Settings(BaseSettings):
     smtp_starttls: bool = True
     smtp_ssl: bool = False
     smtp_timeout_seconds: float = Field(default=10, ge=1, le=30)
+    email_max_attempts: int = Field(default=5, ge=1, le=10)
+    worker_interval_seconds: float = Field(default=5, ge=1, le=60)
     llm_base_url: str = "https://api.openai.com/v1"
     llm_model: str = ""
     llm_api_key: str = ""

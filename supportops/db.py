@@ -310,6 +310,10 @@ class IndexJob(Base):
     status: Mapped[str] = mapped_column(String(20), default="pending")
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     requested_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    next_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    lease_token: Mapped[str | None] = mapped_column(String(40))
     error: Mapped[str | None] = mapped_column(String(160))
     input_tokens: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(
@@ -453,6 +457,7 @@ class DemoAccount(Base):
         DateTime(timezone=True)
     )
     notification_reason: Mapped[str | None] = mapped_column(String(60))
+    launch_email_opt_out: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class RecoveryToken(Base):
@@ -462,6 +467,50 @@ class RecoveryToken(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     used: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class AccountEmailJob(Base):
+    __tablename__ = "account_email_jobs"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    purpose: Mapped[str] = mapped_column(String(20))
+    dedupe_key: Mapped[str | None] = mapped_column(String(80), unique=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    lease_token: Mapped[str | None] = mapped_column(String(40))
+    last_error: Mapped[str | None] = mapped_column(String(80))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
+
+class WorkerHeartbeat(Base):
+    __tablename__ = "worker_heartbeats"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    details: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class PrivacyRequest(Base):
+    __tablename__ = "privacy_requests"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 def make_database(url):

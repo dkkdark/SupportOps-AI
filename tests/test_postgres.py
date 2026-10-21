@@ -42,3 +42,47 @@ def test_postgres_vector_search_checkpoint_and_review(orders):
             ).json()["status"]
             == "approved"
         )
+
+
+@pytest.mark.skipif(
+    not os.getenv("TEST_DATABASE_URL"), reason="requires isolated PostgreSQL/pgvector"
+)
+def test_postgres_semantic_agent_demo_ledger_and_durable_email():
+    import uuid
+    from sqlalchemy import select
+    from supportops.db import AccountEmailJob, DemoAccount
+    from tests.test_agent_semantic import Models
+    from tests.test_workspaces import register, POLICY, make_ticket
+
+    models = Models()
+    transport = httpx.MockTransport(models)
+    config = Settings(
+        database_url=os.environ["TEST_DATABASE_URL"],
+        app_env="test",
+        demo_release=True,
+        model_provider="openai",
+        embedding_provider="openai",
+        openai_api_key="synthetic-only",
+    )
+    app = create_app(config, llm_transport=transport, embedding_transport=transport)
+    with TestClient(app) as c:
+        identity = register(
+            c, "Semantic PostgreSQL", f"alex-{uuid.uuid4().hex}@example.test"
+        )
+        assert c.post("/api/knowledge", json=POLICY).status_code == 201
+        ticket = make_ticket(c)
+        response = c.post(f"/api/tickets/{ticket['id']}/analyze", json={})
+        assert response.status_code == 200, response.text
+        assert response.json()["status"] == "review"
+        assert response.json()["result"]["manifest"]["engine"] == "openai-agent-v1"
+        assert c.get("/api/billing").json()["spent_usd"] > 0
+        with app.state.sessions() as db:
+            assert db.get(DemoAccount, identity["user"]["id"]).reserved_microusd == 0
+            assert (
+                db.scalar(
+                    select(AccountEmailJob).where(
+                        AccountEmailJob.user_id == identity["user"]["id"]
+                    )
+                ).status
+                == "blocked"
+            )

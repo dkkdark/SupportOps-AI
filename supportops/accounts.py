@@ -6,8 +6,9 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import select, update, delete
 from supportops.auth import PASSWORDS, Identity, digest
-from supportops.db import RecoveryToken, LoginSession, User, utcnow
+from supportops.db import RecoveryToken, LoginSession, User, AccountEmailJob, utcnow
 from supportops.mailer import deliver, email_status
+from supportops.email_jobs import enqueue, process, cancel
 
 
 def send_token(config, sessions, user_id, purpose):
@@ -79,7 +80,10 @@ def accounts_router(auth, sessions, config):
         with sessions() as db:
             user = db.scalar(select(User).where(User.email == body.email.casefold()))
             if user:
-                tasks.add_task(send_token, config, sessions, user.id, "reset")
+                job_id = enqueue(db, user.id, "reset")
+                db.commit()
+                if job_id:
+                    tasks.add_task(process, config, sessions, job_id)
         return {
             "message": "If an account exists and email delivery is configured, a recovery link will be sent."
         }
@@ -114,6 +118,7 @@ def accounts_router(auth, sessions, config):
                 .values(used=True)
             )
             user.password_hash = PASSWORDS.hash(body.password)
+            cancel(db, user.id, "reset")
             db.execute(delete(LoginSession).where(LoginSession.user_id == user.id))
             db.commit()
         return {"message": "Password updated. Sign in with your new password."}
@@ -123,7 +128,11 @@ def accounts_router(auth, sessions, config):
         request: Request, tasks: BackgroundTasks, actor: Identity = Depends(auth.user)
     ):
         auth.throttle(request, "verify-email", actor.user_id, limit=3)
-        tasks.add_task(send_token, config, sessions, actor.user_id, "verify")
+        with sessions() as db:
+            job_id = enqueue(db, actor.user_id, "verify")
+            db.commit()
+        if job_id:
+            tasks.add_task(process, config, sessions, job_id)
         return {
             "message": "If email delivery is configured, a verification link will be sent."
         }
@@ -162,9 +171,31 @@ def accounts_router(auth, sessions, config):
                 .values(used=True)
             )
             user.email_verified = True
+            cancel(db, user.id, "verify")
             db.commit()
         return {
             "message": "Email verified. You can use AI processing and connect request sources."
         }
+
+    @router.get("/email-deliveries")
+    def deliveries(actor: Identity = Depends(auth.user)):
+        with sessions() as db:
+            return [
+                {
+                    "id": j.id,
+                    "purpose": j.purpose,
+                    "status": j.status,
+                    "attempts": j.attempts,
+                    "error": j.last_error,
+                    "created_at": j.created_at,
+                    "sent_at": j.sent_at,
+                }
+                for j in db.scalars(
+                    select(AccountEmailJob)
+                    .where(AccountEmailJob.user_id == actor.user_id)
+                    .order_by(AccountEmailJob.created_at.desc())
+                    .limit(20)
+                )
+            ]
 
     return router

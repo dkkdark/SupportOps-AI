@@ -358,12 +358,14 @@ class Auth:
                 db.flush()
                 org = create_organization(db, body.business_name, body.industry, user)
                 try:
-                    result = self.issue(db, response, user, org.id, request)
-                    from supportops.accounts import send_token
+                    from supportops.email_jobs import enqueue, process
 
-                    tasks.add_task(
-                        send_token, self.config, self.sessions, user.id, "verify"
-                    )
+                    email_job_id = enqueue(db, user.id, "verify")
+                    result = self.issue(db, response, user, org.id, request)
+                    if email_job_id:
+                        tasks.add_task(
+                            process, self.config, self.sessions, email_job_id
+                        )
                     return result
                 except IntegrityError:
                     db.rollback()

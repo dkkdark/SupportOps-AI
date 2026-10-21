@@ -18,6 +18,7 @@ from supportops.db import (
 from supportops.openai_client import ModelError, OpenAIClient
 from supportops.retrieval import terms, serialize_document
 from supportops.billing import reserve, settle, reservation_budget, CREDIT_USD
+from supportops.auth import identifier
 
 
 def profile(config):
@@ -49,11 +50,16 @@ def enqueue(db, config, org_id, source_id, user_id=None):
         db.add(job)
     if user_id and job.status != "indexing":
         job.requested_by = user_id
+        job.status, job.attempts = "pending", 0
+        job.next_attempt_at, job.lease_token = utcnow(), None
     return job
 
 
 def index_source(config, sessions, org_id, source_id, transport=None):
+    if config.embedding_provider != "openai":
+        return
     key = (org_id, source_id, profile(config))
+    claim = identifier()
     client = None
     reservation_id = None
     with sessions() as db:
@@ -72,11 +78,23 @@ def index_source(config, sessions, org_id, source_id, transport=None):
                 IndexJob.organization_id == org_id,
                 IndexJob.source_id == source_id,
                 IndexJob.profile == key[2],
-                (IndexJob.status != "indexing")
-                | (IndexJob.updated_at < utcnow() - timedelta(minutes=3)),
+                IndexJob.attempts < 3,
+                (
+                    (IndexJob.status.in_(["pending", "failed"]))
+                    & (IndexJob.next_attempt_at <= utcnow())
+                )
+                | (
+                    (IndexJob.status == "indexing")
+                    & (
+                        IndexJob.updated_at
+                        < utcnow()
+                        - timedelta(seconds=max(180, config.agent_timeout_seconds + 30))
+                    )
+                ),
             )
             .values(
                 status="indexing",
+                lease_token=claim,
                 error=None,
                 attempts=IndexJob.attempts + 1,
                 updated_at=utcnow(),
@@ -85,7 +103,8 @@ def index_source(config, sessions, org_id, source_id, transport=None):
         db.commit()
         if not claimed:
             return
-        user_id = db.get(IndexJob, key, populate_existing=True).requested_by
+        job = db.get(IndexJob, key, populate_existing=True)
+        user_id, attempt = job.requested_by, job.attempts
         docs = db.scalars(
             select(Document).where(
                 Document.organization_id == org_id, Document.source_id == source_id
@@ -124,6 +143,18 @@ def index_source(config, sessions, org_id, source_id, transport=None):
             )
             vectors = client.embeddings([embedding_text(d) for d in pending])
             with sessions() as db:
+                job = db.scalar(
+                    select(IndexJob)
+                    .where(
+                        IndexJob.organization_id == org_id,
+                        IndexJob.source_id == source_id,
+                        IndexJob.profile == key[2],
+                        IndexJob.lease_token == claim,
+                    )
+                    .with_for_update()
+                )
+                if not job:
+                    raise ModelError("index_claim_expired")
                 for d, vector in zip(pending, vectors):
                     current = db.get(Document, (org_id, d.id))
                     if not current or text_hash(current) != text_hash(d):
@@ -139,7 +170,11 @@ def index_source(config, sessions, org_id, source_id, transport=None):
                         )
                     )
                 job = db.get(IndexJob, key)
+                if job.lease_token != claim:
+                    return
                 job.status = "ready"
+                job.lease_token = None
+                job.next_attempt_at = None
                 job.error = None
                 job.input_tokens += client.usage["embedding_tokens"]
                 job.updated_at = utcnow()
@@ -147,24 +182,50 @@ def index_source(config, sessions, org_id, source_id, transport=None):
         else:
             with sessions() as db:
                 job = db.get(IndexJob, key)
+                if job.lease_token != claim:
+                    return
                 job.status = "ready"
+                job.lease_token = None
+                job.next_attempt_at = None
                 job.error = None
                 job.updated_at = utcnow()
                 db.commit()
     except Exception as exc:
+        code = (
+            exc.code
+            if isinstance(exc, ModelError)
+            else "demo_budget_exhausted"
+            if isinstance(exc, HTTPException) and exc.status_code in (402, 429)
+            else "membership_revoked"
+            if isinstance(exc, HTTPException) and exc.status_code == 403
+            else "indexing_failed"
+        )
+        blocked = code in (
+            "model_not_configured",
+            "demo_budget_exhausted",
+            "membership_revoked",
+            "agent_budget_exceeded",
+        )
         with sessions() as db:
-            job = db.get(IndexJob, key)
-            if job:
-                job.status = "failed"
-                job.error = (
-                    exc.code
-                    if isinstance(exc, ModelError)
-                    else "demo_budget_exhausted"
-                    if isinstance(exc, HTTPException) and exc.status_code == 429
-                    else "indexing_failed"
+            db.execute(
+                update(IndexJob)
+                .where(
+                    IndexJob.organization_id == org_id,
+                    IndexJob.source_id == source_id,
+                    IndexJob.profile == key[2],
+                    IndexJob.lease_token == claim,
                 )
-                job.updated_at = utcnow()
-                db.commit()
+                .values(
+                    status="blocked" if blocked else "failed",
+                    error=code,
+                    lease_token=None,
+                    next_attempt_at=None
+                    if blocked or attempt >= 3
+                    else utcnow() + timedelta(seconds=30 * 2 ** (attempt - 1)),
+                    updated_at=utcnow(),
+                )
+            )
+            db.commit()
     finally:
         if reservation_id:
             settle(
@@ -198,14 +259,10 @@ def search(db, config, client, org_id, query, limit=6):
         Document.effective_from <= day,
         (Document.effective_to.is_(None)) | (Document.effective_to > day),
     ]
-    docs = db.scalars(select(Document).where(*current)).all()
-    if not docs:
-        return []
-    vector = client.embeddings([query])[0]
-    byid = {d.id: d for d in docs}
     # Scope and model-profile filters are applied before candidates reach the agent.
     stmt = (
-        select(ChunkEmbedding)
+        select(ChunkEmbedding, Document)
+        .select_from(ChunkEmbedding)
         .join(
             Document,
             (Document.organization_id == ChunkEmbedding.organization_id)
@@ -217,14 +274,16 @@ def search(db, config, client, org_id, query, limit=6):
             ChunkEmbedding.profile == pr,
         )
     )
+    if db.scalar(stmt.with_only_columns(Document.id).limit(1)) is None:
+        return []
+    vector = client.embeddings([query])[0]
     if db.bind.dialect.name == "postgresql":
         stmt = stmt.order_by(
             cast(ChunkEmbedding.vector, Vector(1536)).cosine_distance(vector)
         ).limit(60)
-    rows = db.scalars(stmt).all()
+    rows = db.execute(stmt).all()
     scored = []
-    for row in rows:
-        d = byid[row.document_id]
+    for row, d in rows:
         if row.text_hash != text_hash(d):
             continue
         cosine = sum(a * b for a, b in zip(vector, row.vector))
