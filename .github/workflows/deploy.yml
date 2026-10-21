@@ -73,6 +73,7 @@ jobs:
         run: |
           aws s3 cp reports/ "s3://$ARTIFACTS_BUCKET/evaluations/$CODE_VERSION/" --recursive
           aws s3 cp var/deployment.json "s3://$ARTIFACTS_BUCKET/evaluations/$CODE_VERSION/deployment.json"
+          aws s3 cp data/knowledge/policies.json "s3://$ARTIFACTS_BUCKET/evaluations/$CODE_VERSION/policies.json"
       - name: Roll back application on deployment or smoke failure
         if: failure() && steps.before.outcome == 'success'
         run: python -m scripts.ecs_deploy rollback
