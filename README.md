@@ -105,6 +105,8 @@ The configured sender/contact is `info.xenonimus@gmail.com`. Server-side STARTTL
 
 ## Delivery and operation
 
+Durable account-mail delivery, worker heartbeat/retries, technical retention, private account export/deletion requests, AI-charge reconciliation and isolated SQLite restore drills are implemented. Commands and external launch prerequisites: [backend operations — Russian](docs/backend-operations.ru.md). Production startup checks the schema; `python -m scripts.migrate` initializes both application and checkpoint tables.
+
 - SQLite quick start; private PostgreSQL/pgvector and persisted checkpoints for deployment.
 - Terraform: HTTPS ALB, Fargate application/indexer, RDS, ECR, Secrets Manager, CloudWatch, optional telemetry and scoped GitHub OIDC.
 - Helm and Compose include a durable indexing worker. Failed/interrupted jobs can be retried safely.
@@ -113,7 +115,7 @@ The configured sender/contact is `info.xenonimus@gmail.com`. Server-side STARTTL
 - Verification/recovery links are expiring, single-use and hashed; password reset revokes existing sessions.
 - Operator policy drafts are available at `/terms` and `/privacy`. Future production checkout requires operator details and reviewed HTTPS policy URLs; demo checkout is disabled. Configuration checks in Settings do not prove legal suitability or deployment success.
 
-Migrations `002`–`004` preserve existing records and prior model usage. Back up both application/checkpoint data before upgrades. `002` is forward-only; returning to the former single-business binary requires its matching database/code backup.
+Migrations `002`–`005` preserve existing records and prior model usage. Back up both application/checkpoint data before upgrades. `002` is forward-only; returning to the former single-business binary requires its matching database/code backup.
 
 Repository remote: [dkkdark/SupportOps-AI](https://github.com/dkkdark/SupportOps-AI). Work remains in local feature commits. **No push, publication or cloud apply has been performed.**
 

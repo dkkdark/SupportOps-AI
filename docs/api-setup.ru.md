@@ -45,7 +45,7 @@ EMBEDDING_INPUT_USD_PER_MILLION=0.13
 Сделай согласованную копию приложения и checkpoint-БД. Затем в активированном `.venv`:
 
 ```bash
-alembic upgrade head
+python -m scripts.migrate
 python -m scripts.live_acceptance
 ```
 
