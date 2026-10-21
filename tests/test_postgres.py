@@ -21,7 +21,7 @@ def test_postgres_vector_search_checkpoint_and_review(orders):
         create_app(config, orders_transport=httpx.MockTransport(orders_handler(orders)))
     ) as c:
         body = {
-            "customer": "Anna Smirnova",
+            "customer": "Emma Wilson",
             "subject": "PostgreSQL integration",
             "message": "Где заказ 1042 и можно отменить покупку?",
             "order_id": "1042",

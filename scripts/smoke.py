@@ -18,7 +18,7 @@ def main():
             "/api/tickets",
             headers={"Idempotency-Key": uuid.uuid4().hex},
             json={
-                "customer": "Anna Smirnova",
+                "customer": "Emma Wilson",
                 "subject": "Smoke: delivery and cancellation",
                 "message": "Order 1042 was supposed to arrive yesterday. Where is it, and can I cancel?",
                 "order_id": "1042",

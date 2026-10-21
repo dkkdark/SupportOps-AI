@@ -138,7 +138,7 @@ function sidebar() {
     .map(([p, i]) => nav(p, i))
     .join(
       '',
-    )}</nav><div class="sidebar-bottom">${nav('settings', 'settings')}<div class="system-note"><b>${icon('shield')}Human in the loop</b>Every reply gets a human review before it reaches a customer.<a href="#quality">How review works ${icon('arrow')}</a></div><div class="profile"><div class="avatar">KB</div><div><strong>Ksenia</strong><small>Support agent</small></div>${icon('down')}</div></div></aside>`;
+    )}</nav><div class="sidebar-bottom">${nav('settings', 'settings')}<div class="system-note"><b>${icon('shield')}Human in the loop</b>Every reply gets a human review before it reaches a customer.<a href="#quality">How review works ${icon('arrow')}</a></div><div class="profile"><div class="avatar">AM</div><div><strong>Alex Morgan</strong><small>Support agent</small></div>${icon('down')}</div></div></aside>`;
 }
 function nav(p, i) {
   return `<a href="#${p}" class="nav-item ${state.page === p ? 'active' : ''}" aria-label="${pages[p]}" ${state.page === p ? 'aria-current="page"' : ''}>${icon(i)}<span>${pages[p]}</span>${p === 'tickets' ? `<b class="nav-count">${state.tickets.filter((t) => !['approved', 'escalated'].includes(t.status)).length}</b>` : ''}</a>`;
@@ -146,7 +146,7 @@ function nav(p, i) {
 function render() {
   document.title = `SupportOps AI · ${pages[state.page]}`;
   $('#app').innerHTML =
-    `<div class="app-shell">${sidebar()}<main class="main"><header class="topbar"><div class="breadcrumbs"><span>Workspace</span>${icon('chevron')}<b>${pages[state.page]}</b></div><div class="top-actions"><span class="system-status"><i class="status-dot"></i>${isDemo ? 'Browser demo' : 'API connected'}</span><i class="top-divider"></i><button class="icon-btn" data-action="activity" aria-label="Recent activity">${icon('bell')}</button><div class="avatar" aria-label="Ksenia’s profile">KB</div></div></header>${isDemo ? `<div class="demo-banner"><span>${icon('info')}Interactive demo · synthetic data · changes are saved in this browser</span><button data-action="demo-info">About the demo ${icon('arrow')}</button></div>` : ''}<div class="content">${pageContent()}</div></main></div>`;
+    `<div class="app-shell">${sidebar()}<main class="main"><header class="topbar"><div class="breadcrumbs"><span>Workspace</span>${icon('chevron')}<b>${pages[state.page]}</b></div><div class="top-actions"><span class="system-status"><i class="status-dot"></i>${isDemo ? 'Browser demo' : 'API connected'}</span><i class="top-divider"></i><button class="icon-btn" data-action="activity" aria-label="Recent activity">${icon('bell')}</button><div class="avatar" aria-label="Alex Morgan’s profile">AM</div></div></header>${isDemo ? `<div class="demo-banner"><span>${icon('info')}Interactive demo · synthetic data · changes are saved in this browser</span><button data-action="demo-info">About the demo ${icon('arrow')}</button></div>` : ''}<div class="content">${pageContent()}</div></main></div>`;
 }
 function heading(title, sub, actions = '') {
   return `<div class="page-heading"><div><h1>${title}</h1><p>${sub}</p></div><div class="heading-actions">${actions}</div></div>`;
@@ -406,7 +406,7 @@ function newTicket() {
   modal(
     'New ticket',
     'Create a ticket for a Listva customer.',
-    `<form id="ticket-form"><div class="form-grid"><label class="field">Customer name<input name="customer" required minlength="2" maxlength="100" placeholder="Anna Smirnova"></label><label class="field">Email<input name="email" type="email" placeholder="customer@example.test" maxlength="160"></label></div><div class="form-grid"><label class="field">Order number<input name="order_id" inputmode="numeric" pattern="[0-9]{4,12}" placeholder="1042"></label><label class="field">Channel<select name="channel"><option value="email">Email</option><option value="chat">Chat</option><option value="web">Web form</option></select></label></div><label class="field">Subject<input name="subject" required minlength="3" maxlength="180" placeholder="For example, a delayed delivery"></label><label class="field">Customer message<textarea name="message" required minlength="10" maxlength="5000" placeholder="Describe the customer’s request…"></textarea></label><label class="field">Priority<select name="priority"><option value="normal">Normal</option><option value="high">High</option></select></label><div class="notice-card">${icon('info')}Test orders: 1042–1049. The customer must match the order. For order 1042, use Anna Smirnova.</div><div class="modal-actions"><button class="btn" type="button" data-action="fill-example">Use an example</button><button class="btn btn-primary" type="submit">${icon('plus')}Create ticket</button></div></form>`,
+    `<form id="ticket-form"><div class="form-grid"><label class="field">Customer name<input name="customer" required minlength="2" maxlength="100" placeholder="Emma Wilson"></label><label class="field">Email<input name="email" type="email" placeholder="customer@example.test" maxlength="160"></label></div><div class="form-grid"><label class="field">Order number<input name="order_id" inputmode="numeric" pattern="[0-9]{4,12}" placeholder="1042"></label><label class="field">Channel<select name="channel"><option value="email">Email</option><option value="chat">Chat</option><option value="web">Web form</option></select></label></div><label class="field">Subject<input name="subject" required minlength="3" maxlength="180" placeholder="For example, a delayed delivery"></label><label class="field">Customer message<textarea name="message" required minlength="10" maxlength="5000" placeholder="Describe the customer’s request…"></textarea></label><label class="field">Priority<select name="priority"><option value="normal">Normal</option><option value="high">High</option></select></label><div class="notice-card">${icon('info')}Test orders: 1042–1049. The customer must match the order. For order 1042, use Emma Wilson.</div><div class="modal-actions"><button class="btn" type="button" data-action="fill-example">Use an example</button><button class="btn btn-primary" type="submit">${icon('plus')}Create ticket</button></div></form>`,
   );
 }
 function showDoc(id) {
@@ -499,7 +499,7 @@ async function runFault(fault) {
     const t = await request('/tickets', {
       method: 'POST',
       body: {
-        customer: 'Anna Smirnova',
+        customer: 'Emma Wilson',
         email: 'customer1@example.test',
         order_id: '1042',
         channel: 'web',
@@ -620,7 +620,7 @@ document.addEventListener('click', async (e) => {
       case 'fill-example': {
         const form = $('#ticket-form');
         const values = {
-          customer: 'Anna Smirnova',
+          customer: 'Emma Wilson',
           email: 'customer1@example.test',
           order_id: '1042',
           subject: 'Where is my order, and can I cancel it?',

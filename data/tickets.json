@@ -1,7 +1,7 @@
 [
   {
     "id": "SO-1284",
-    "customer": "Anna Smirnova",
+    "customer": "Emma Wilson",
     "email": "customer1@example.test",
     "subject": "Where is my order? Can I cancel?",
     "message": "Order #1042 was supposed to arrive yesterday. Where is it, and can I cancel the purchase?",
@@ -16,7 +16,7 @@
   },
   {
     "id": "SO-1283",
-    "customer": "Michael Volkov",
+    "customer": "Michael Johnson",
     "email": "customer2@example.test",
     "subject": "Returning a Forma vase",
     "message": "Hello! I received order 1043, but the vase does not fit my room. How can I return it?",
@@ -31,7 +31,7 @@
   },
   {
     "id": "SO-1282",
-    "customer": "Daria Kozlova",
+    "customer": "Olivia Davis",
     "email": "customer3@example.test",
     "subject": "Cancel my order before dispatch",
     "message": "I would like to cancel order #1044 before it is dispatched. Could you help?",
@@ -46,7 +46,7 @@
   },
   {
     "id": "SO-1281",
-    "customer": "Alex Morozov",
+    "customer": "James Miller",
     "email": "customer4@example.test",
     "subject": "One of the cups arrived cracked",
     "message": "One cup in order 1045 is broken. I kept the packaging and have photos of the damage.",
@@ -61,7 +61,7 @@
   },
   {
     "id": "SO-1280",
-    "customer": "Elena Sokolova",
+    "customer": "Sophia Brown",
     "email": "customer5@example.test",
     "subject": "Can I change the delivery address?",
     "message": "Order 1046 is in transit. Can I change the delivery address?",
@@ -76,7 +76,7 @@
   },
   {
     "id": "SO-1279",
-    "customer": "Ivan Petrov",
+    "customer": "Ethan Taylor",
     "email": "customer6@example.test",
     "subject": "When will I receive my refund?",
     "message": "I returned order 1047. How long does a refund take after the item is inspected?",
@@ -91,7 +91,7 @@
   },
   {
     "id": "SO-1278",
-    "customer": "Maria Novikova",
+    "customer": "Ava Anderson",
     "email": "customer7@example.test",
     "subject": "I was charged twice",
     "message": "I was charged twice for order 1048. Could you check the payments?",
@@ -106,7 +106,7 @@
   },
   {
     "id": "SO-1277",
-    "customer": "Paul Orlov",
+    "customer": "Noah Williams",
     "email": "customer8@example.test",
     "subject": "An update on my delivery",
     "message": "Where is order 1049, and what is the tracking number?",

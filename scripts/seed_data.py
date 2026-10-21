@@ -172,14 +172,14 @@ def generate():
         json.dumps(docs, ensure_ascii=False, indent=2)
     )
     names = [
-        "Anna Smirnova",
-        "Michael Volkov",
-        "Daria Kozlova",
-        "Alex Morozov",
-        "Elena Sokolova",
-        "Ivan Petrov",
-        "Maria Novikova",
-        "Paul Orlov",
+        "Emma Wilson",
+        "Michael Johnson",
+        "Olivia Davis",
+        "James Miller",
+        "Sophia Brown",
+        "Ethan Taylor",
+        "Ava Anderson",
+        "Noah Williams",
     ]
     statuses = [
         "delayed",

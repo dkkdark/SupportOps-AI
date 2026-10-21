@@ -48,7 +48,7 @@ def client(tmp_path, orders):
 @pytest.fixture
 def payload():
     return {
-        "customer": "Anna Smirnova",
+        "customer": "Emma Wilson",
         "email": "customer1@example.test",
         "subject": "Вопрос по заказу",
         "message": "Где заказ 1042 и можно ли отменить покупку?",

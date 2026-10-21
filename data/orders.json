@@ -1,7 +1,7 @@
 [
   {
     "id": "1042",
-    "customer": "Anna Smirnova",
+    "customer": "Emma Wilson",
     "status": "delayed",
     "total": 4890,
     "currency": "RUB",
@@ -19,7 +19,7 @@
   },
   {
     "id": "1043",
-    "customer": "Michael Volkov",
+    "customer": "Michael Johnson",
     "status": "delivered",
     "total": 3200,
     "currency": "RUB",
@@ -37,7 +37,7 @@
   },
   {
     "id": "1044",
-    "customer": "Daria Kozlova",
+    "customer": "Olivia Davis",
     "status": "processing",
     "total": 6490,
     "currency": "RUB",
@@ -55,7 +55,7 @@
   },
   {
     "id": "1045",
-    "customer": "Alex Morozov",
+    "customer": "James Miller",
     "status": "delivered",
     "total": 2780,
     "currency": "RUB",
@@ -73,7 +73,7 @@
   },
   {
     "id": "1046",
-    "customer": "Elena Sokolova",
+    "customer": "Sophia Brown",
     "status": "shipped",
     "total": 3590,
     "currency": "RUB",
@@ -91,7 +91,7 @@
   },
   {
     "id": "1047",
-    "customer": "Ivan Petrov",
+    "customer": "Ethan Taylor",
     "status": "delivered",
     "total": 5990,
     "currency": "RUB",
@@ -109,7 +109,7 @@
   },
   {
     "id": "1048",
-    "customer": "Maria Novikova",
+    "customer": "Ava Anderson",
     "status": "processing",
     "total": 2490,
     "currency": "RUB",
@@ -127,7 +127,7 @@
   },
   {
     "id": "1049",
-    "customer": "Paul Orlov",
+    "customer": "Noah Williams",
     "status": "shipped",
     "total": 4200,
     "currency": "RUB",
