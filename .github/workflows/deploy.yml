@@ -1,0 +1,84 @@
+name: Staging · guarded ECS deployment
+on:
+  workflow_dispatch:
+    inputs:
+      live_benchmark:
+        type: boolean
+        default: false
+        description: Run bounded live-model evaluation using configured LLM secrets
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: staging-deployment
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+      ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+      ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+      APP_URL: ${{ vars.APP_URL }}
+      CODE_VERSION: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+      - run: pip install -r requirements.lock && pip install --no-deps -e .
+      - name: Tests and baseline release guard
+        run: pytest && python -m eval.run --split holdout
+      - name: Bounded live-model benchmark
+        if: inputs.live_benchmark
+        run: python -m eval.run --split holdout --live --output reports/live.json
+        env:
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: login
+      - uses: docker/setup-buildx-action@v3
+      - name: Build and push versioned image
+        uses: docker/build-push-action@v6
+        id: image
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}-${{ github.run_id }}
+      - name: Resolve immutable image and current task
+        id: before
+        env:
+          IMAGE: ${{ steps.login.outputs.registry }}/${{ env.ECR_REPOSITORY }}@${{ steps.image.outputs.digest }}
+        run: python -m scripts.ecs_deploy prepare
+      - name: Migrate and deploy
+        id: rollout
+        run: python -m scripts.ecs_deploy rollout
+      - name: Smoke test deployed application
+        run: python -m scripts.smoke --url "$APP_URL"
+        env:
+          APP_API_KEY: ${{ secrets.APP_API_KEY }}
+      - name: Preserve release evidence
+        env:
+          ARTIFACTS_BUCKET: ${{ vars.ARTIFACTS_BUCKET }}
+        run: |
+          aws s3 cp reports/ "s3://$ARTIFACTS_BUCKET/evaluations/$CODE_VERSION/" --recursive
+          aws s3 cp var/deployment.json "s3://$ARTIFACTS_BUCKET/evaluations/$CODE_VERSION/deployment.json"
+      - name: Roll back application on deployment or smoke failure
+        if: failure() && steps.before.outcome == 'success'
+        run: python -m scripts.ecs_deploy rollback
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-evidence-${{ github.sha }}
+          path: |
+            reports/*.json
+            var/deployment.json
