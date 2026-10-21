@@ -5,10 +5,6 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.6"
-    }
   }
   # For shared environments configure an encrypted, locked remote backend.
   # terraform init -backend-config=... after adding your organization's backend.

@@ -47,6 +47,9 @@ resource "aws_ecs_task_definition" "app" {
       portMappings = [{ containerPort = 8000, protocol = "tcp" }],
       environment = [
         { name = "APP_ENV", value = "production" },
+        { name = "FORWARDED_ALLOW_IPS", value = aws_vpc.main.cidr_block },
+        { name = "ALLOW_DEMO_SIGNUP", value = "false" },
+        { name = "SESSION_DAYS", value = "7" },
         { name = "DB_HOST", value = aws_db_instance.main.address },
         { name = "DB_USER", value = "supportops" },
         { name = "DB_NAME", value = "supportops" },
@@ -58,8 +61,7 @@ resource "aws_ecs_task_definition" "app" {
         { name = "CODE_VERSION", value = var.image_digest }
       ],
       secrets = concat([
-        { name = "DB_PASSWORD", valueFrom = "${aws_db_instance.main.master_user_secret[0].secret_arn}:password::" },
-        { name = "APP_API_KEY", valueFrom = aws_secretsmanager_secret.api.arn }
+        { name = "DB_PASSWORD", valueFrom = "${aws_db_instance.main.master_user_secret[0].secret_arn}:password::" }
       ], var.llm_secret_arn == "" ? [] : [{ name = "LLM_API_KEY", valueFrom = var.llm_secret_arn }]),
       logConfiguration = local.log_config,
       healthCheck      = { command = ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=2)\""], interval = 30, timeout = 5, retries = 3, startPeriod = 45 },

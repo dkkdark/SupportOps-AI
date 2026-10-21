@@ -43,13 +43,20 @@ def run(split="holdout", live=False, output=None):
                 "database_url": f"sqlite:///{temp}/eval.db",
                 "model_provider": "openai_compatible" if live else "baseline",
                 "app_env": "evaluation",
-                "app_api_key": "",
                 "fault_injection_enabled": True,
             }
         )
         with TestClient(
             create_app(config, orders_transport=httpx.MockTransport(handle))
         ) as client:
+            client.post("/api/auth/demo").raise_for_status()
+            account = client.get("/api/auth/me").json()
+            client.headers.update(
+                {
+                    "X-CSRF-Token": account["csrf_token"],
+                    "X-Workspace-ID": account["organization"]["id"],
+                }
+            )
             for case in cases:
                 t = client.post("/api/tickets", json=case["input"]).json()
                 response = client.post(

@@ -64,15 +64,3 @@ resource "aws_s3_bucket_lifecycle_configuration" "artifacts" {
     noncurrent_version_expiration { noncurrent_days = 30 }
   }
 }
-resource "random_password" "api" {
-  length  = 40
-  special = false
-}
-resource "aws_secretsmanager_secret" "api" {
-  name_prefix             = "${local.name}-api-key-"
-  recovery_window_in_days = 7
-}
-resource "aws_secretsmanager_secret_version" "api" {
-  secret_id     = aws_secretsmanager_secret.api.id
-  secret_string = random_password.api.result
-}

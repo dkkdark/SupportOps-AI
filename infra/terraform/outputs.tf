@@ -5,7 +5,6 @@ output "service" { value = aws_ecs_service.app.name }
 output "task_definition" { value = aws_ecs_task_definition.app.arn }
 output "deployment_role_arn" { value = aws_iam_role.github.arn }
 output "artifacts_bucket" { value = aws_s3_bucket.artifacts.id }
-output "api_key_secret_arn" { value = aws_secretsmanager_secret.api.arn }
 output "db_secret_arn" { value = aws_db_instance.main.master_user_secret[0].secret_arn }
 output "private_subnets" { value = aws_subnet.private[*].id }
 output "app_security_group" { value = aws_security_group.app.id }

@@ -1,3 +1,4 @@
+appEnv: production
 replicaCount: 1
 image:
   repository: supportops
