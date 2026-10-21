@@ -35,7 +35,7 @@ jobs:
           cache-dependency-path: requirements.lock
       - run: pip install -r requirements.lock && pip install --no-deps -e .
       - name: Migrate real PostgreSQL
-        run: alembic upgrade head
+        run: python -m scripts.migrate
         env:
           DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
       - name: API, workflow, failure and pgvector integration tests

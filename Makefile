@@ -1,6 +1,6 @@
 PYTHON ?= .venv/bin/python
 
-.PHONY: install dev test eval demo up down smoke
+.PHONY: install dev worker check test eval demo up down smoke
 install:
 	python3.13 -m venv .venv
 	$(PYTHON) -m pip install -r requirements.lock
@@ -21,3 +21,8 @@ down:
 	docker compose down
 smoke:
 	$(PYTHON) -m scripts.smoke --url http://127.0.0.1:8010
+
+worker:
+	$(PYTHON) -m scripts.worker
+check:
+	$(PYTHON) -m scripts.check_backend

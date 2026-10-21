@@ -64,7 +64,14 @@ spec:
         - name: indexer
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: [python, -m, scripts.index_worker]
+          command: [python, -m, scripts.worker]
+          livenessProbe:
+            exec:
+              command: [python, -m, scripts.worker_health]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 4
           envFrom:
             - secretRef:
                 name: {{ .Values.existingSecret }}

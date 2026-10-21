@@ -88,7 +88,8 @@ resource "aws_ecs_task_definition" "app" {
     },
     {
       name             = "indexer", image = local.app_image, essential = true,
-      command          = ["python", "-m", "scripts.index_worker"],
+      command          = ["python", "-m", "scripts.worker"],
+      healthCheck      = { command = ["CMD", "python", "-m", "scripts.worker_health"], interval = 30, timeout = 5, retries = 3, startPeriod = 60 },
       environment      = local.app_environment,
       secrets          = local.app_secrets,
       logConfiguration = local.log_config,

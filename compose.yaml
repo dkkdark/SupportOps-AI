@@ -15,7 +15,7 @@ services:
     # No host port: only the Compose network can reach PostgreSQL.
   migrate:
     build: .
-    command: ["alembic", "upgrade", "head"]
+    command: ["python", "-m", "scripts.migrate"]
     environment:
       DATABASE_URL: postgresql+psycopg://supportops:local-demo-only@db:5432/supportops
     depends_on:
@@ -85,7 +85,11 @@ services:
       migrate:
         condition: service_completed_successfully
     healthcheck:
-      disable: true
+      test: ["CMD", "python", "-m", "scripts.worker_health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
     restart: unless-stopped
 volumes:
   postgres:

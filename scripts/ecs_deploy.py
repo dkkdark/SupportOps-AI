@@ -83,7 +83,7 @@ def main(command):
         state = json.loads(FILE.read_text())
         overrides = {
             "containerOverrides": [
-                {"name": "app", "command": ["alembic", "upgrade", "head"]}
+                {"name": "app", "command": ["python", "-m", "scripts.migrate"]}
             ]
         }
         overrides_path = FILE.parent / "migration-overrides.json"
