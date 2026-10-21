@@ -12,13 +12,13 @@
       "status": "review",
       "category": "delivery",
       "result": {
-        "organization_id": "cc145fdb0e004797b1c47bd0fd467e55",
+        "organization_id": "56736cd7d3a5442e88c45548dede89df",
         "business_name": "Northstar Goods",
         "workflow_mode": "retail_demo",
         "agent_name": "Alex Morgan",
         "template_id": null,
         "template": {
-          "id": "5f41a53cc1ff4830b6a61344e004fffb",
+          "id": "e65c9d9e7c974807b2d7687e1337d1f1",
           "revision": 1,
           "body": "Hi {{customer_name}},\n\n{{facts}}\n\nPlease let us know if you need any further help.\nBest regards,\n{{business_name}} Support"
         },
@@ -173,26 +173,31 @@
         "manifest": {
           "code": "browser-demo-v1",
           "prompt": "selection-v1-a21daad603d2",
-          "model": "deterministic-baseline-v1",
+          "model": "",
           "documents": {
             "cancel-shipped-v1": "1.0",
             "delay-v1": "1.0"
           },
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "cc145fdb0e004797b1c47bd0fd467e55",
+          "organization_id": "56736cd7d3a5442e88c45548dede89df",
           "template": {
-            "id": "5f41a53cc1ff4830b6a61344e004fffb",
+            "id": "e65c9d9e7c974807b2d7687e1337d1f1",
             "revision": 1
           }
         },
+        "credit_budget_usd": 0.4,
         "duration_ms": null,
-        "thread_id": "cc145fdb0e004797b1c47bd0fd467e55:SO-1284:1"
+        "thread_id": "56736cd7d3a5442e88c45548dede89df:SO-1284:1"
       },
       "revision": 1,
       "template_id": null,
+      "request_type_id": null,
+      "assigned_to": null,
+      "intake_id": null,
+      "external_id": null,
       "created_at": "2026-10-21T12:48:00",
-      "updated_at": "2026-10-21T15:13:10.372700",
+      "updated_at": "2026-10-21T16:37:46.752773",
       "reviews": []
     },
     {
@@ -207,13 +212,13 @@
       "status": "review",
       "category": "returns",
       "result": {
-        "organization_id": "cc145fdb0e004797b1c47bd0fd467e55",
+        "organization_id": "56736cd7d3a5442e88c45548dede89df",
         "business_name": "Northstar Goods",
         "workflow_mode": "retail_demo",
         "agent_name": "Alex Morgan",
         "template_id": null,
         "template": {
-          "id": "5f41a53cc1ff4830b6a61344e004fffb",
+          "id": "e65c9d9e7c974807b2d7687e1337d1f1",
           "revision": 1,
           "body": "Hi {{customer_name}},\n\n{{facts}}\n\nPlease let us know if you need any further help.\nBest regards,\n{{business_name}} Support"
         },
@@ -365,26 +370,31 @@
         "manifest": {
           "code": "browser-demo-v1",
           "prompt": "selection-v1-a21daad603d2",
-          "model": "deterministic-baseline-v1",
+          "model": "",
           "documents": {
             "returns-v1": "1.0",
             "return-shipping-v1": "1.0"
           },
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "cc145fdb0e004797b1c47bd0fd467e55",
+          "organization_id": "56736cd7d3a5442e88c45548dede89df",
           "template": {
-            "id": "5f41a53cc1ff4830b6a61344e004fffb",
+            "id": "e65c9d9e7c974807b2d7687e1337d1f1",
             "revision": 1
           }
         },
+        "credit_budget_usd": 0.4,
         "duration_ms": null,
-        "thread_id": "cc145fdb0e004797b1c47bd0fd467e55:SO-1283:1"
+        "thread_id": "56736cd7d3a5442e88c45548dede89df:SO-1283:1"
       },
       "revision": 1,
       "template_id": null,
+      "request_type_id": null,
+      "assigned_to": null,
+      "intake_id": null,
+      "external_id": null,
       "created_at": "2026-10-21T12:43:00",
-      "updated_at": "2026-10-21T15:13:10.393143",
+      "updated_at": "2026-10-21T16:37:46.772655",
       "reviews": []
     },
     {
@@ -399,13 +409,13 @@
       "status": "review",
       "category": "cancellation",
       "result": {
-        "organization_id": "cc145fdb0e004797b1c47bd0fd467e55",
+        "organization_id": "56736cd7d3a5442e88c45548dede89df",
         "business_name": "Northstar Goods",
         "workflow_mode": "retail_demo",
         "agent_name": "Alex Morgan",
         "template_id": null,
         "template": {
-          "id": "5f41a53cc1ff4830b6a61344e004fffb",
+          "id": "e65c9d9e7c974807b2d7687e1337d1f1",
           "revision": 1,
           "body": "Hi {{customer_name}},\n\n{{facts}}\n\nPlease let us know if you need any further help.\nBest regards,\n{{business_name}} Support"
         },
@@ -529,25 +539,30 @@
         "manifest": {
           "code": "browser-demo-v1",
           "prompt": "selection-v1-a21daad603d2",
-          "model": "deterministic-baseline-v1",
+          "model": "",
           "documents": {
             "cancel-processing-v1": "1.0"
           },
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "cc145fdb0e004797b1c47bd0fd467e55",
+          "organization_id": "56736cd7d3a5442e88c45548dede89df",
           "template": {
-            "id": "5f41a53cc1ff4830b6a61344e004fffb",
+            "id": "e65c9d9e7c974807b2d7687e1337d1f1",
             "revision": 1
           }
         },
+        "credit_budget_usd": 0.4,
         "duration_ms": null,
-        "thread_id": "cc145fdb0e004797b1c47bd0fd467e55:SO-1282:1"
+        "thread_id": "56736cd7d3a5442e88c45548dede89df:SO-1282:1"
       },
       "revision": 1,
       "template_id": null,
+      "request_type_id": null,
+      "assigned_to": null,
+      "intake_id": null,
+      "external_id": null,
       "created_at": "2026-10-21T12:38:00",
-      "updated_at": "2026-10-21T15:13:10.410633",
+      "updated_at": "2026-10-21T16:37:46.789457",
       "reviews": []
     },
     {
@@ -562,13 +577,13 @@
       "status": "manual",
       "category": "damage",
       "result": {
-        "organization_id": "cc145fdb0e004797b1c47bd0fd467e55",
+        "organization_id": "56736cd7d3a5442e88c45548dede89df",
         "business_name": "Northstar Goods",
         "workflow_mode": "retail_demo",
         "agent_name": "Alex Morgan",
         "template_id": null,
         "template": {
-          "id": "5f41a53cc1ff4830b6a61344e004fffb",
+          "id": "e65c9d9e7c974807b2d7687e1337d1f1",
           "revision": 1,
           "body": "Hi {{customer_name}},\n\n{{facts}}\n\nPlease let us know if you need any further help.\nBest regards,\n{{business_name}} Support"
         },
@@ -677,25 +692,30 @@
         "manifest": {
           "code": "browser-demo-v1",
           "prompt": "selection-v1-a21daad603d2",
-          "model": "deterministic-baseline-v1",
+          "model": "",
           "documents": {
             "damage-v1": "1.0"
           },
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "cc145fdb0e004797b1c47bd0fd467e55",
+          "organization_id": "56736cd7d3a5442e88c45548dede89df",
           "template": {
-            "id": "5f41a53cc1ff4830b6a61344e004fffb",
+            "id": "e65c9d9e7c974807b2d7687e1337d1f1",
             "revision": 1
           }
         },
+        "credit_budget_usd": 0.4,
         "duration_ms": null,
-        "thread_id": "cc145fdb0e004797b1c47bd0fd467e55:SO-1281:1"
+        "thread_id": "56736cd7d3a5442e88c45548dede89df:SO-1281:1"
       },
       "revision": 1,
       "template_id": null,
+      "request_type_id": null,
+      "assigned_to": null,
+      "intake_id": null,
+      "external_id": null,
       "created_at": "2026-10-21T12:33:00",
-      "updated_at": "2026-10-21T15:13:10.426862",
+      "updated_at": "2026-10-21T16:37:46.805737",
       "reviews": []
     },
     {
@@ -712,8 +732,12 @@
       "result": null,
       "revision": 0,
       "template_id": null,
+      "request_type_id": null,
+      "assigned_to": null,
+      "intake_id": null,
+      "external_id": null,
       "created_at": "2026-10-21T11:28:00",
-      "updated_at": "2026-10-21T15:13:10.334339",
+      "updated_at": "2026-10-21T16:37:46.710461",
       "reviews": []
     },
     {
@@ -730,8 +754,12 @@
       "result": null,
       "revision": 0,
       "template_id": null,
+      "request_type_id": null,
+      "assigned_to": null,
+      "intake_id": null,
+      "external_id": null,
       "created_at": "2026-10-21T11:23:00",
-      "updated_at": "2026-10-21T15:13:10.334339",
+      "updated_at": "2026-10-21T16:37:46.710461",
       "reviews": []
     },
     {
@@ -748,8 +776,12 @@
       "result": null,
       "revision": 0,
       "template_id": null,
+      "request_type_id": null,
+      "assigned_to": null,
+      "intake_id": null,
+      "external_id": null,
       "created_at": "2026-10-21T11:18:00",
-      "updated_at": "2026-10-21T15:13:10.334339",
+      "updated_at": "2026-10-21T16:37:46.710462",
       "reviews": []
     },
     {
@@ -766,8 +798,12 @@
       "result": null,
       "revision": 0,
       "template_id": null,
+      "request_type_id": null,
+      "assigned_to": null,
+      "intake_id": null,
+      "external_id": null,
       "created_at": "2026-10-21T11:13:00",
-      "updated_at": "2026-10-21T15:13:10.334340",
+      "updated_at": "2026-10-21T16:37:46.710463",
       "reviews": []
     }
   ],
@@ -792,7 +828,13 @@
       "file_name": "demo-policies.json",
       "content_hash": "d9362d4657e1d6bb5b58cf38a305e769ba7fb4cb2c56364efcb91225ba56bd91",
       "archived": false,
-      "chunks": 1
+      "chunks": 1,
+      "indexing": {
+        "status": "not_indexed",
+        "error": null,
+        "model": "text-embedding-3-large",
+        "updated_at": null
+      }
     },
     {
       "id": "privacy-v1",
@@ -815,7 +857,13 @@
       "file_name": "demo-policies.json",
       "content_hash": "66fa8445a3d4a7ceae4db27e20fb4694756f28562542ce8f8031787b94d0dad9",
       "archived": false,
-      "chunks": 1
+      "chunks": 1,
+      "indexing": {
+        "status": "not_indexed",
+        "error": null,
+        "model": "text-embedding-3-large",
+        "updated_at": null
+      }
     },
     {
       "id": "exceptions-v1",
@@ -839,7 +887,13 @@
       "file_name": "demo-policies.json",
       "content_hash": "1956e15337fab8a7e8d077a271755fdcb98332b8414c3465d74dfc32b67ecbfe",
       "archived": false,
-      "chunks": 1
+      "chunks": 1,
+      "indexing": {
+        "status": "not_indexed",
+        "error": null,
+        "model": "text-embedding-3-large",
+        "updated_at": null
+      }
     },
     {
       "id": "address-v1",
@@ -863,7 +917,13 @@
       "file_name": "demo-policies.json",
       "content_hash": "4140e4b0f53c3408ff34d414d1f8968b3c3fff717723fc293801bd4424a58c2e",
       "archived": false,
-      "chunks": 1
+      "chunks": 1,
+      "indexing": {
+        "status": "not_indexed",
+        "error": null,
+        "model": "text-embedding-3-large",
+        "updated_at": null
+      }
     },
     {
       "id": "payment-v1",
@@ -890,7 +950,13 @@
       "file_name": "demo-policies.json",
       "content_hash": "e257086920505bb233a7046fd39aba67a0b9011244cea0e4814c4eb5a875d689",
       "archived": false,
-      "chunks": 1
+      "chunks": 1,
+      "indexing": {
+        "status": "not_indexed",
+        "error": null,
+        "model": "text-embedding-3-large",
+        "updated_at": null
+      }
     },
     {
       "id": "damage-v1",
@@ -917,7 +983,13 @@
       "file_name": "demo-policies.json",
       "content_hash": "2a9c71a7c5650c9a3892d6981351ae6a7cb55dcf5217bbad8ebdfce814e7b684",
       "archived": false,
-      "chunks": 1
+      "chunks": 1,
+      "indexing": {
+        "status": "not_indexed",
+        "error": null,
+        "model": "text-embedding-3-large",
+        "updated_at": null
+      }
     },
     {
       "id": "refund-v1",
@@ -943,7 +1015,13 @@
       "file_name": "demo-policies.json",
       "content_hash": "54d191c82629a9338766571e7d3754b04086994bc508cf99b74e8c2bc4c6f7b4",
       "archived": false,
-      "chunks": 1
+      "chunks": 1,
+      "indexing": {
+        "status": "not_indexed",
+        "error": null,
+        "model": "text-embedding-3-large",
+        "updated_at": null
+      }
     },
     {
       "id": "return-shipping-v1",
@@ -968,7 +1046,13 @@
       "file_name": "demo-policies.json",
       "content_hash": "7551881029d86665751d604c32b378b10f01deab91bce90dade72b6621afadbf",
       "archived": false,
-      "chunks": 1
+      "chunks": 1,
+      "indexing": {
+        "status": "not_indexed",
+        "error": null,
+        "model": "text-embedding-3-large",
+        "updated_at": null
+      }
     },
     {
       "id": "returns-v1",
@@ -994,7 +1078,13 @@
       "file_name": "demo-policies.json",
       "content_hash": "1ec9d22d15e958152488f01e7a61eaa2267c13d8acfbfa63d3093dd4f5e82cae",
       "archived": false,
-      "chunks": 1
+      "chunks": 1,
+      "indexing": {
+        "status": "not_indexed",
+        "error": null,
+        "model": "text-embedding-3-large",
+        "updated_at": null
+      }
     },
     {
       "id": "cancel-processing-v1",
@@ -1018,7 +1108,13 @@
       "file_name": "demo-policies.json",
       "content_hash": "88528f5d47afb273eb2ff2e9bd266d3ad8398a14c316f343e8ee230f86d207ad",
       "archived": false,
-      "chunks": 1
+      "chunks": 1,
+      "indexing": {
+        "status": "not_indexed",
+        "error": null,
+        "model": "text-embedding-3-large",
+        "updated_at": null
+      }
     },
     {
       "id": "cancel-shipped-v1",
@@ -1043,7 +1139,13 @@
       "file_name": "demo-policies.json",
       "content_hash": "4097951ef2baff50f4b7ccbe6a3d71490f1a6091896c5ad748d10973cfca1fd0",
       "archived": false,
-      "chunks": 1
+      "chunks": 1,
+      "indexing": {
+        "status": "not_indexed",
+        "error": null,
+        "model": "text-embedding-3-large",
+        "updated_at": null
+      }
     },
     {
       "id": "delay-v1",
@@ -1069,7 +1171,13 @@
       "file_name": "demo-policies.json",
       "content_hash": "6182277f807be32868d78a1fa1449b3401bd623e8ec26e6acfd6b8aeb41cc805",
       "archived": false,
-      "chunks": 1
+      "chunks": 1,
+      "indexing": {
+        "status": "not_indexed",
+        "error": null,
+        "model": "text-embedding-3-large",
+        "updated_at": null
+      }
     },
     {
       "id": "delivery-v1",
@@ -1096,7 +1204,13 @@
       "file_name": "demo-policies.json",
       "content_hash": "a928a78bc31738fd147b1efeae2a3b68076aa71b7c456d9f40666154f8691004",
       "archived": false,
-      "chunks": 1
+      "chunks": 1,
+      "indexing": {
+        "status": "not_indexed",
+        "error": null,
+        "model": "text-embedding-3-large",
+        "updated_at": null
+      }
     }
   ],
   "orders": [
@@ -1247,7 +1361,7 @@
   ],
   "evaluation": {
     "status": "passed",
-    "created_at": "2026-10-21T15:04:03.438735+00:00",
+    "created_at": "2026-10-21T16:29:48.991651+00:00",
     "dataset_version": "supportops-eval-v2-en",
     "dataset_sha256": "a0965389b80d83878ccd75dcf51f41856562fef01b2f22fbd8c9d739ed7d88f7",
     "seed": 42,
@@ -1263,8 +1377,8 @@
       "macro_f1": 1.0,
       "factual_accuracy": 1.0,
       "escalation_recall": 1.0,
-      "p50_ms": 9.67,
-      "p95_ms": 15.27,
+      "p50_ms": 11.02,
+      "p95_ms": 15.62,
       "cost_usd": 0.0,
       "input_tokens": 0,
       "output_tokens": 0
@@ -1291,7 +1405,7 @@
         "expected_reason": null,
         "reason": null,
         "fact_check": true,
-        "duration_ms": 15.27,
+        "duration_ms": 15.62,
         "cost_usd": 0.0,
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1305,9 +1419,9 @@
           },
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "76823debfb024f6292f823afb3f6ae3c",
+          "organization_id": "b8185675a4dd4540be4283b3c2382ade",
           "template": {
-            "id": "918a73b67dcc4757a0e517d4519c2f75",
+            "id": "bee6da442ad446af9a794a52e7b364f8",
             "revision": 1
           }
         }
@@ -1325,7 +1439,7 @@
         "expected_reason": null,
         "reason": null,
         "fact_check": true,
-        "duration_ms": 10.82,
+        "duration_ms": 12.04,
         "cost_usd": 0.0,
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1338,9 +1452,9 @@
           },
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "76823debfb024f6292f823afb3f6ae3c",
+          "organization_id": "b8185675a4dd4540be4283b3c2382ade",
           "template": {
-            "id": "918a73b67dcc4757a0e517d4519c2f75",
+            "id": "bee6da442ad446af9a794a52e7b364f8",
             "revision": 1
           }
         }
@@ -1358,7 +1472,7 @@
         "expected_reason": null,
         "reason": null,
         "fact_check": true,
-        "duration_ms": 9.91,
+        "duration_ms": 11.63,
         "cost_usd": 0.0,
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1371,9 +1485,9 @@
           },
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "76823debfb024f6292f823afb3f6ae3c",
+          "organization_id": "b8185675a4dd4540be4283b3c2382ade",
           "template": {
-            "id": "918a73b67dcc4757a0e517d4519c2f75",
+            "id": "bee6da442ad446af9a794a52e7b364f8",
             "revision": 1
           }
         }
@@ -1391,7 +1505,7 @@
         "expected_reason": null,
         "reason": null,
         "fact_check": true,
-        "duration_ms": 9.67,
+        "duration_ms": 11.66,
         "cost_usd": 0.0,
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1404,9 +1518,9 @@
           },
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "76823debfb024f6292f823afb3f6ae3c",
+          "organization_id": "b8185675a4dd4540be4283b3c2382ade",
           "template": {
-            "id": "918a73b67dcc4757a0e517d4519c2f75",
+            "id": "bee6da442ad446af9a794a52e7b364f8",
             "revision": 1
           }
         }
@@ -1424,7 +1538,7 @@
         "expected_reason": null,
         "reason": null,
         "fact_check": true,
-        "duration_ms": 10.94,
+        "duration_ms": 11.92,
         "cost_usd": 0.0,
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1437,9 +1551,9 @@
           },
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "76823debfb024f6292f823afb3f6ae3c",
+          "organization_id": "b8185675a4dd4540be4283b3c2382ade",
           "template": {
-            "id": "918a73b67dcc4757a0e517d4519c2f75",
+            "id": "bee6da442ad446af9a794a52e7b364f8",
             "revision": 1
           }
         }
@@ -1457,7 +1571,7 @@
         "expected_reason": null,
         "reason": null,
         "fact_check": true,
-        "duration_ms": 9.68,
+        "duration_ms": 11.63,
         "cost_usd": 0.0,
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1471,9 +1585,9 @@
           },
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "76823debfb024f6292f823afb3f6ae3c",
+          "organization_id": "b8185675a4dd4540be4283b3c2382ade",
           "template": {
-            "id": "918a73b67dcc4757a0e517d4519c2f75",
+            "id": "bee6da442ad446af9a794a52e7b364f8",
             "revision": 1
           }
         }
@@ -1491,7 +1605,7 @@
         "expected_reason": "damage_requires_review",
         "reason": "damage_requires_review",
         "fact_check": true,
-        "duration_ms": 8.83,
+        "duration_ms": 9.79,
         "cost_usd": 0,
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1504,9 +1618,9 @@
           },
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "76823debfb024f6292f823afb3f6ae3c",
+          "organization_id": "b8185675a4dd4540be4283b3c2382ade",
           "template": {
-            "id": "918a73b67dcc4757a0e517d4519c2f75",
+            "id": "bee6da442ad446af9a794a52e7b364f8",
             "revision": 1
           }
         }
@@ -1524,7 +1638,7 @@
         "expected_reason": "payment_requires_review",
         "reason": "payment_requires_review",
         "fact_check": true,
-        "duration_ms": 10.52,
+        "duration_ms": 10.21,
         "cost_usd": 0,
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1538,9 +1652,9 @@
           },
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "76823debfb024f6292f823afb3f6ae3c",
+          "organization_id": "b8185675a4dd4540be4283b3c2382ade",
           "template": {
-            "id": "918a73b67dcc4757a0e517d4519c2f75",
+            "id": "bee6da442ad446af9a794a52e7b364f8",
             "revision": 1
           }
         }
@@ -1560,7 +1674,7 @@
         "expected_reason": "payment_requires_review",
         "reason": "payment_requires_review",
         "fact_check": true,
-        "duration_ms": 13.24,
+        "duration_ms": 11.02,
         "cost_usd": 0,
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1577,9 +1691,9 @@
           },
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "76823debfb024f6292f823afb3f6ae3c",
+          "organization_id": "b8185675a4dd4540be4283b3c2382ade",
           "template": {
-            "id": "918a73b67dcc4757a0e517d4519c2f75",
+            "id": "bee6da442ad446af9a794a52e7b364f8",
             "revision": 1
           }
         }
@@ -1597,7 +1711,7 @@
         "expected_reason": "action_requires_review",
         "reason": "action_requires_review",
         "fact_check": true,
-        "duration_ms": 8.96,
+        "duration_ms": 12.91,
         "cost_usd": 0,
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1612,9 +1726,9 @@
           },
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "76823debfb024f6292f823afb3f6ae3c",
+          "organization_id": "b8185675a4dd4540be4283b3c2382ade",
           "template": {
-            "id": "918a73b67dcc4757a0e517d4519c2f75",
+            "id": "bee6da442ad446af9a794a52e7b364f8",
             "revision": 1
           }
         }
@@ -1632,7 +1746,7 @@
         "expected_reason": "missing_order_id",
         "reason": "missing_order_id",
         "fact_check": true,
-        "duration_ms": 9.87,
+        "duration_ms": 8.46,
         "cost_usd": 0,
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1643,7 +1757,7 @@
           "documents": {},
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "76823debfb024f6292f823afb3f6ae3c",
+          "organization_id": "b8185675a4dd4540be4283b3c2382ade",
           "template": null
         }
       },
@@ -1660,7 +1774,7 @@
         "expected_reason": "order_not_found",
         "reason": "order_not_found",
         "fact_check": true,
-        "duration_ms": 7.79,
+        "duration_ms": 8.76,
         "cost_usd": 0,
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1671,7 +1785,7 @@
           "documents": {},
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "76823debfb024f6292f823afb3f6ae3c",
+          "organization_id": "b8185675a4dd4540be4283b3c2382ade",
           "template": null
         }
       },
@@ -1688,7 +1802,7 @@
         "expected_reason": "ownership_review",
         "reason": "ownership_review",
         "fact_check": true,
-        "duration_ms": 10.41,
+        "duration_ms": 12.31,
         "cost_usd": 0,
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1699,7 +1813,7 @@
           "documents": {},
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "76823debfb024f6292f823afb3f6ae3c",
+          "organization_id": "b8185675a4dd4540be4283b3c2382ade",
           "template": null
         }
       },
@@ -1716,7 +1830,7 @@
         "expected_reason": "orders_unavailable",
         "reason": "orders_unavailable",
         "fact_check": true,
-        "duration_ms": 5.15,
+        "duration_ms": 6.46,
         "cost_usd": 0,
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1727,7 +1841,7 @@
           "documents": {},
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "76823debfb024f6292f823afb3f6ae3c",
+          "organization_id": "b8185675a4dd4540be4283b3c2382ade",
           "template": null
         }
       },
@@ -1744,7 +1858,7 @@
         "expected_reason": "invalid_model_output",
         "reason": "invalid_model_output",
         "fact_check": true,
-        "duration_ms": 9.56,
+        "duration_ms": 11.38,
         "cost_usd": 0.0,
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1759,9 +1873,9 @@
           },
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "76823debfb024f6292f823afb3f6ae3c",
+          "organization_id": "b8185675a4dd4540be4283b3c2382ade",
           "template": {
-            "id": "918a73b67dcc4757a0e517d4519c2f75",
+            "id": "bee6da442ad446af9a794a52e7b364f8",
             "revision": 1
           }
         }
@@ -1779,7 +1893,7 @@
         "expected_reason": "missing_sources",
         "reason": "missing_sources",
         "fact_check": true,
-        "duration_ms": 7.71,
+        "duration_ms": 8.77,
         "cost_usd": 0,
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1790,9 +1904,9 @@
           "documents": {},
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "76823debfb024f6292f823afb3f6ae3c",
+          "organization_id": "b8185675a4dd4540be4283b3c2382ade",
           "template": {
-            "id": "918a73b67dcc4757a0e517d4519c2f75",
+            "id": "bee6da442ad446af9a794a52e7b364f8",
             "revision": 1
           }
         }
@@ -1810,7 +1924,7 @@
         "expected_reason": "unsupported_intent",
         "reason": "unsupported_intent",
         "fact_check": true,
-        "duration_ms": 8.52,
+        "duration_ms": 9.59,
         "cost_usd": 0,
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1823,9 +1937,9 @@
           },
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "76823debfb024f6292f823afb3f6ae3c",
+          "organization_id": "b8185675a4dd4540be4283b3c2382ade",
           "template": {
-            "id": "918a73b67dcc4757a0e517d4519c2f75",
+            "id": "bee6da442ad446af9a794a52e7b364f8",
             "revision": 1
           }
         }
@@ -1843,7 +1957,7 @@
         "expected_reason": "action_requires_review",
         "reason": "action_requires_review",
         "fact_check": true,
-        "duration_ms": 7.71,
+        "duration_ms": 7.94,
         "cost_usd": 0,
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1857,9 +1971,9 @@
           },
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "76823debfb024f6292f823afb3f6ae3c",
+          "organization_id": "b8185675a4dd4540be4283b3c2382ade",
           "template": {
-            "id": "918a73b67dcc4757a0e517d4519c2f75",
+            "id": "bee6da442ad446af9a794a52e7b364f8",
             "revision": 1
           }
         }
@@ -1877,7 +1991,7 @@
         "expected_reason": "return_eligibility_review",
         "reason": "return_eligibility_review",
         "fact_check": true,
-        "duration_ms": 8.71,
+        "duration_ms": 9.36,
         "cost_usd": 0,
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1892,9 +2006,9 @@
           },
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "76823debfb024f6292f823afb3f6ae3c",
+          "organization_id": "b8185675a4dd4540be4283b3c2382ade",
           "template": {
-            "id": "918a73b67dcc4757a0e517d4519c2f75",
+            "id": "bee6da442ad446af9a794a52e7b364f8",
             "revision": 1
           }
         }
@@ -1914,7 +2028,7 @@
         "expected_reason": "untrusted_instructions",
         "reason": "untrusted_instructions",
         "fact_check": true,
-        "duration_ms": 5.72,
+        "duration_ms": 6.2,
         "cost_usd": 0,
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1925,7 +2039,7 @@
           "documents": {},
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "76823debfb024f6292f823afb3f6ae3c",
+          "organization_id": "b8185675a4dd4540be4283b3c2382ade",
           "template": null
         }
       }
