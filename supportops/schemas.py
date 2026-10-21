@@ -7,7 +7,9 @@ Category = Literal["delivery", "cancellation", "returns", "damage", "payment", "
 
 class TicketInput(BaseModel):
     customer: str = Field(min_length=2, max_length=100)
-    email: str = Field(default="", max_length=160, pattern=r"^$|^[^\s@]+@[^\s@]+\.[^\s@]+$")
+    email: str = Field(
+        default="", max_length=160, pattern=r"^$|^[^\s@]+@[^\s@]+\.[^\s@]+$"
+    )
     subject: str = Field(min_length=3, max_length=180)
     message: str = Field(min_length=10, max_length=5000)
     order_id: str | None = Field(default=None, pattern=r"^\d{4,12}$")
@@ -31,7 +33,9 @@ class Order(BaseModel):
 
 
 class AnalyzeInput(BaseModel):
-    fault: Literal["none", "orders_timeout", "invalid_model", "missing_sources"] = "none"
+    fault: Literal["none", "orders_timeout", "invalid_model", "missing_sources"] = (
+        "none"
+    )
 
 
 class ReviewInput(BaseModel):
@@ -43,6 +47,7 @@ class ReviewInput(BaseModel):
 
 class ModelSelection(BaseModel):
     """The model selects evidence. Facts and actions are rendered by trusted code."""
+
     model_config = ConfigDict(extra="forbid")
     fact_ids: list[str] = Field(min_length=1, max_length=12)
     tone: Literal["empathetic", "neutral"]

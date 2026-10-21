@@ -31,7 +31,15 @@ class Settings(BaseSettings):
         if self.db_host:
             if not self.db_password:
                 raise ValueError("DB_PASSWORD is required with DB_HOST")
-            self.database_url = URL.create("postgresql+psycopg",username=self.db_user,password=self.db_password,host=self.db_host,port=5432,database=self.db_name,query={"sslmode":"require"}).render_as_string(hide_password=False)
+            self.database_url = URL.create(
+                "postgresql+psycopg",
+                username=self.db_user,
+                password=self.db_password,
+                host=self.db_host,
+                port=5432,
+                database=self.db_name,
+                query={"sslmode": "require"},
+            ).render_as_string(hide_password=False)
         return self
 
 

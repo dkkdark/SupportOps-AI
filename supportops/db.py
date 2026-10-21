@@ -15,7 +15,9 @@ class Embedding(TypeDecorator):
     cache_ok = True
 
     def load_dialect_impl(self, dialect):
-        return dialect.type_descriptor(Vector(128) if dialect.name == "postgresql" else JSON())
+        return dialect.type_descriptor(
+            Vector(128) if dialect.name == "postgresql" else JSON()
+        )
 
 
 class Base(DeclarativeBase):
@@ -37,8 +39,12 @@ class Ticket(Base):
     result: Mapped[dict | None] = mapped_column(JSON)
     revision: Mapped[int] = mapped_column(Integer, default=0)
     idempotency_key: Mapped[str | None] = mapped_column(String(100), unique=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
 
 
 class Document(Base):
@@ -64,11 +70,17 @@ class Review(Base):
     text: Mapped[str] = mapped_column(Text)
     note: Mapped[str] = mapped_column(Text)
     actor: Mapped[str] = mapped_column(String(80), default="operator")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
 
 
 def make_database(url):
     if url.startswith("sqlite"):
         Path("var").mkdir(exist_ok=True)
-    engine = create_engine(url, pool_pre_ping=True, connect_args={"check_same_thread": False} if url.startswith("sqlite") else {})
+    engine = create_engine(
+        url,
+        pool_pre_ping=True,
+        connect_args={"check_same_thread": False} if url.startswith("sqlite") else {},
+    )
     return engine, sessionmaker(engine, expire_on_commit=False)
