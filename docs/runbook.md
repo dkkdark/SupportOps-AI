@@ -2,7 +2,7 @@
 
 ## Start with a ticket ID
 
-Open **Monitoring**, select the run and inspect **Workflow**. Record the ticket ID, trace ID, manual reason and manifest. Use technical logs to find the failed step. Do not paste customer messages, API keys or full order payloads into shared incident logs.
+Open **Monitoring**, select the run and inspect **Workflow**. Record the workspace ID, ticket ID, trace ID, manual reason and manifest. Use technical logs to find the failed step. Do not paste customer messages, API keys or full order payloads into shared incident logs.
 
 ```bash
 docker compose ps
@@ -11,13 +11,13 @@ curl --fail http://127.0.0.1:8010/health/live
 curl --fail http://127.0.0.1:8010/health/ready
 ```
 
-Liveness means the process is serving requests. Readiness checks the database and orders API. Neither verifies AI answer quality. A configured LLM can be unavailable while technical readiness remains green; the workflow handles it explicitly and live evaluation provides separate content checks.
+Liveness means the process is serving requests. Readiness checks the database. The optional sample orders API is checked when a sample ticket uses it. Neither verifies AI answer quality. A configured LLM can be unavailable while technical readiness remains green; the workflow handles it explicitly and live evaluation provides separate content checks.
 
 ## 1. Orders API timeout
 
 **Expected:** no approvable draft, `manual`, reason `orders_unavailable`, order step visible in the trace.
 
-In local development, **Monitoring → Orders API timeout → Run** creates a ticket with a controlled injected timeout. Fault injection must be enabled; the production default disables it. This tests the exception route deterministically rather than adding an actual sleep to an HTTP server. A separate network timeout test should be used for infrastructure timing.
+In an isolated sample workspace during local development, **Monitoring → Orders API timeout → Run** creates a ticket with a controlled injected timeout. Fault injection must be enabled; the production default disables it. This tests the exception route deterministically rather than adding an actual sleep to an HTTP server. A separate network timeout test should be used for infrastructure timing.
 
 For a real local dependency outage:
 
@@ -47,7 +47,7 @@ python -m eval.run --split dev --output reports/dev.json
 
 **Expected:** no approvable draft, explicit `missing_sources` or `conflicting_documents` reason. An archived policy must never be used just because it has similar wording.
 
-Check source version, effective date and the requested fact ID. Only one version of a policy key may be active at a time. Fix the corpus with a reviewed version/data migration; startup deliberately does not overwrite an existing corpus. Restore the current rules, then retry analysis. Test the effective-date boundary and archived 14-day policy:
+Check source version, effective date and the requested fact ID. Only one version of a policy key may be active at a time. In the affected workspace, open Knowledge base, check archival/effective dates, then publish a corrected version. New business knowledge is never replaced by the sample corpus. Retry analysis after publishing. The sample archive/date boundary can be checked with:
 
 ```bash
 pytest tests/test_workflow.py -k 'policy or conflicting'
@@ -87,3 +87,12 @@ Local SQLite: stop the process before making a consistent backup of both the app
 Compose: preserve the `postgres` volume. Use PostgreSQL backup tools for both application tables and LangGraph checkpoint tables. Restoring only tickets loses resumable workflow state.
 
 AWS: use the seven-day automated RDS backups and point-in-time restore to a **new** instance. Verify pgvector, Alembic revision and checkpoint tables; update the DB endpoint/managed secret references and redeploy tasks. Run readiness, smoke and review-resume checks before moving traffic. This restore procedure has not been executed against an AWS account in this project.
+
+
+## 7. Business access and schema conversion
+
+For access errors, sign in again and check the selected workspace. Refresh stale tabs after switching workspaces. An owner/admin can inspect membership and restore an agent’s removed access. Admins cannot change owner/admin memberships; owner/self demotion is blocked. Never grant access by editing a ticket ID or copying another company’s rows.
+
+Invitation links are single-use, email-bound and expire after 7 days. Revoke/recreate them from Team if lost or expired; no email is sent automatically. Existing users must enter their existing password. Account recovery and verified-email delivery are not implemented.
+
+Migration 002 is a forward-only schema conversion. Previous single-business records are retained under `legacy-demo` with no members, not assigned to the next registrant. The pre-conversion local backup lives under `var/backups/before-saas-20261021-163754/`. To restore it, stop the app and restore both application/checkpoint files together with the pre-conversion code. Do not downgrade by dropping tenant keys or roll back just the application image across this boundary. Keep production migration/restore credentials separate from ordinary employees.

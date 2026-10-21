@@ -1,5 +1,7 @@
 # Evaluation and release guard
 
+This suite evaluates the isolated synthetic retail workflow only. Real business workspaces do not display this benchmark as their own score; they require a representative business-specific dataset. Tenant isolation and uploaded-content workflows are covered by `tests/test_workspaces.py`.
+
 ## Dataset
 
 `eval/dataset.json` contains 100 English synthetic requests in 20 hand-labeled scenario families. Each family has four development phrasings and one reserved holdout phrasing. `eval/build_dataset.py` reproduces the checked-in dataset; labels are explicit, not calculated from the classifier. Russian input remains covered by API regression tests.

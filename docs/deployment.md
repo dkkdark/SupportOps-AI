@@ -23,7 +23,7 @@ terraform apply staging.tfplan
 
 An apply creates billable resources even with `desired_count=0`. The bootstrap task references an image that does not exist until delivery; zero tasks prevent a failed boot. Retrieve the Terraform outputs and configure the GitHub environment below. Set DNS to the ALB and use the matching domain for `APP_URL`; the generated ALB hostname will not match your own ACM certificate.
 
-RDS manages the database password in Secrets Manager. ECS injects its password JSON field into `DB_PASSWORD`; `DB_HOST`, `DB_USER`, and `DB_NAME` construct a TLS-required connection string in server memory. ECS also injects a generated `APP_API_KEY`. Retrieve that value through your organization’s normal secret access workflow, then enter it in the UI or configure the CI smoke secret. Terraform’s generated API-key secret value is present in state: use encrypted, access-controlled, locked remote state for shared environments. Never commit tfstate/tfvars or print secrets in build logs.
+RDS manages the database password in Secrets Manager. ECS injects `DB_PASSWORD`; `DB_HOST`, `DB_USER` and `DB_NAME` construct a TLS-required connection string in server memory. Users authenticate through business accounts and database-backed sessions; no shared application API key is used. Production session cookies require HTTPS. Fargate trusts forwarded client addresses only from the VPC CIDR; its security group accepts application traffic only from the ALB. Keep equivalent trusted-proxy restrictions when adding another ingress so login throttles receive real client addresses without trusting arbitrary headers. `ALLOW_DEMO_SIGNUP=false` disables sample business signup. Keep Terraform state encrypted, access-controlled and locked. Never commit tfstate/tfvars or print secrets in build logs.
 
 The demo application uses the RDS provisioning account for application tables/checkpoints. Before real production use, create a restricted runtime database role and separate migration credentials. Configure backup/restore procedures and secret-rotation restarts. Provisioning IAM is separate from the narrowly scoped GitHub deployment role.
 
@@ -45,9 +45,9 @@ Configure these staging **variables** from Terraform outputs:
 | `ARTIFACTS_BUCKET` | S3 bucket output |
 | `LLM_MODEL` / `LLM_BASE_URL` | Only needed for optional live evaluation |
 
-Configure `APP_API_KEY` as a staging **secret**, and `LLM_API_KEY` only if live benchmarking is requested. The latter is a provider credential, not an AWS access key. Do not enable a live-model release without separately passing its live evaluation. The default deployment runs the deterministic baseline unless Terraform is configured with `llm_secret_arn` and `llm_model`.
+Configure `LLM_API_KEY` as a staging **secret** only if live benchmarking is requested. The latter is a provider credential, not an AWS access key. Do not enable a live-model release without separately passing its live evaluation. The default deployment runs the deterministic baseline unless Terraform is configured with `llm_secret_arn` and `llm_model`.
 
-The dispatch reruns tests and baseline holdout, optionally runs a bounded real-model benchmark, builds and pushes a unique commit/run-tagged image, resolves its immutable digest, records rollback metadata, registers a task definition, runs Alembic as a one-off task, updates the service and waits for stability. It then runs the end-to-end smoke and preserves evidence in S3. The ECS circuit breaker handles unhealthy rollout; the workflow also restores the previous task definition after a failed rollout/smoke. Database downgrades are deliberately not automatic. On the first deployment there may be no previously healthy version to restore; verify and repair prerequisites before retrying.
+The dispatch reruns tests and baseline holdout, optionally runs a bounded real-model benchmark, builds and pushes a unique commit/run-tagged image, resolves its immutable digest, records rollback metadata, registers a task definition, runs Alembic as a one-off task, updates the service and waits for stability. The smoke creates and retains a separate synthetic business, publishes its policy, reviews a grounded ticket and logs out; it does not need demo signup enabled. It then runs the end-to-end smoke and preserves evidence in S3. The ECS circuit breaker handles unhealthy rollout; the workflow also restores the previous task definition after a failed rollout/smoke. Database downgrades are deliberately not automatic. Migration 002 is the initial conversion to business workspaces and is incompatible with the former single-business binary: take a consistent backup and plan a maintenance window for an existing installation. Do not automatically roll back to a pre-002 image against a converted database; restore the matching database/code backup instead. On the first deployment there may be no previously healthy version to restore; verify and repair prerequisites before retrying.
 
 For release immutability, use image digests and retain old ECR images used by rollback. Only untagged images are subject to the included ECR lifecycle rule. Terraform ignores task-definition changes on the service so routine Terraform applies do not accidentally undo CI releases.
 
@@ -78,11 +78,13 @@ kind create cluster --name supportops
 docker build -t supportops:local .
 kind load docker-image supportops:local --name supportops
 kubectl create namespace supportops
-# Create a local .env.k8s containing DATABASE_URL, APP_API_KEY and MODEL_PROVIDER.
+# Create a local .env.k8s containing DATABASE_URL and MODEL_PROVIDER.
 # Use a cluster-reachable DB hostname, not 127.0.0.1.
 kubectl -n supportops create secret generic supportops-env --from-env-file=.env.k8s
 helm lint infra/helm
-helm upgrade --install supportops infra/helm --namespace supportops --wait --timeout 5m
+helm upgrade --install supportops infra/helm --namespace supportops --set appEnv=development --wait --timeout 5m
+# APP_ENV=production requires HTTPS for authentication cookies.
+# For local kind-only HTTP testing set APP_ENV=development explicitly.
 kubectl -n supportops port-forward service/supportops 8010:8000
 ```
 
