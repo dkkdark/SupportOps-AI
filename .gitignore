@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+.env
+var/
+reports/
+*.db*
+*.tar.gz
+.DS_Store
+.terraform/
+*.tfstate*
+*.tfplan
+terraform.tfvars
+.openai/*.local.*

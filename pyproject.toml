@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "supportops-ai"
+version = "0.1.0"
+description = "Evidence-grounded support workspace with human review and an AI release guard"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115,<1", "uvicorn>=0.34,<1", "sqlalchemy>=2.0,<3",
+  "pydantic-settings>=2.7,<3", "httpx>=0.28,<1", "langgraph>=1,<2",
+  "langgraph-checkpoint-sqlite>=3,<4", "langgraph-checkpoint-postgres>=3,<4",
+  "psycopg[binary,pool]>=3.2,<4", "pgvector>=0.4,<1", "alembic>=1.15,<2",
+  "opentelemetry-sdk>=1.30,<2", "opentelemetry-exporter-otlp-proto-http>=1.30,<2"
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10", "pytest-cov>=6,<8"]
+
+[tool.setuptools.packages.find]
+include = ["supportops*"]
+
+[tool.setuptools.package-data]
+supportops = ["web/*", "prompts/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

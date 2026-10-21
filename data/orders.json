@@ -1,0 +1,146 @@
+[
+  {
+    "id": "1042",
+    "customer": "Анна Смирнова",
+    "status": "delayed",
+    "total": 4890,
+    "currency": "RUB",
+    "placed_at": "2026-10-16",
+    "expected_at": "2026-10-20",
+    "delivered_at": null,
+    "carrier": "СДЭК",
+    "tracking": "SYNTH1042RU",
+    "items": [
+      {
+        "title": "Настольная лампа Kanso",
+        "quantity": 1
+      }
+    ]
+  },
+  {
+    "id": "1043",
+    "customer": "Михаил Волков",
+    "status": "delivered",
+    "total": 3200,
+    "currency": "RUB",
+    "placed_at": "2026-10-16",
+    "expected_at": "2026-10-20",
+    "delivered_at": "2026-10-19",
+    "carrier": "СДЭК",
+    "tracking": "SYNTH1043RU",
+    "items": [
+      {
+        "title": "Керамическая ваза Forma",
+        "quantity": 1
+      }
+    ]
+  },
+  {
+    "id": "1044",
+    "customer": "Дарья Козлова",
+    "status": "processing",
+    "total": 6490,
+    "currency": "RUB",
+    "placed_at": "2026-10-16",
+    "expected_at": "2026-10-20",
+    "delivered_at": null,
+    "carrier": "СДЭК",
+    "tracking": null,
+    "items": [
+      {
+        "title": "Плед Soft cotton",
+        "quantity": 1
+      }
+    ]
+  },
+  {
+    "id": "1045",
+    "customer": "Алексей Морозов",
+    "status": "delivered",
+    "total": 2780,
+    "currency": "RUB",
+    "placed_at": "2026-10-16",
+    "expected_at": "2026-10-20",
+    "delivered_at": "2026-10-19",
+    "carrier": "СДЭК",
+    "tracking": "SYNTH1045RU",
+    "items": [
+      {
+        "title": "Набор чашек Line",
+        "quantity": 1
+      }
+    ]
+  },
+  {
+    "id": "1046",
+    "customer": "Елена Соколова",
+    "status": "shipped",
+    "total": 3590,
+    "currency": "RUB",
+    "placed_at": "2026-10-16",
+    "expected_at": "2026-10-20",
+    "delivered_at": null,
+    "carrier": "СДЭК",
+    "tracking": "SYNTH1046RU",
+    "items": [
+      {
+        "title": "Органайзер Oak",
+        "quantity": 1
+      }
+    ]
+  },
+  {
+    "id": "1047",
+    "customer": "Иван Петров",
+    "status": "delivered",
+    "total": 5990,
+    "currency": "RUB",
+    "placed_at": "2026-10-16",
+    "expected_at": "2026-10-20",
+    "delivered_at": "2026-10-19",
+    "carrier": "СДЭК",
+    "tracking": "SYNTH1047RU",
+    "items": [
+      {
+        "title": "Настенные часы Mono",
+        "quantity": 1
+      }
+    ]
+  },
+  {
+    "id": "1048",
+    "customer": "Мария Новикова",
+    "status": "processing",
+    "total": 2490,
+    "currency": "RUB",
+    "placed_at": "2026-10-16",
+    "expected_at": "2026-10-20",
+    "delivered_at": null,
+    "carrier": "СДЭК",
+    "tracking": null,
+    "items": [
+      {
+        "title": "Поднос Ash",
+        "quantity": 1
+      }
+    ]
+  },
+  {
+    "id": "1049",
+    "customer": "Павел Орлов",
+    "status": "shipped",
+    "total": 4200,
+    "currency": "RUB",
+    "placed_at": "2026-10-16",
+    "expected_at": "2026-10-20",
+    "delivered_at": null,
+    "carrier": "СДЭК",
+    "tracking": "SYNTH1049RU",
+    "items": [
+      {
+        "title": "Льняная скатерть",
+        "quantity": 1
+      }
+    ]
+  }
+]
