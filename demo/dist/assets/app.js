@@ -585,7 +585,7 @@ function teamPage() {
 }
 function workspaceSettings() {
   const org = account.organization;
-  return `${heading('Workspace settings', 'A home for your business and your team.')}<section class="panel"><h2>${esc(businessName())}</h2><p>${esc(org?.role || 'No workspace')} access · ${esc(account.user.email)}</p>${org && canManage() ? `<form id="workspace-settings"><div class="form-grid"><label class="field">Business name<input name="name" value="${esc(org.name)}" required minlength="2" maxlength="120"></label><label class="field">Industry<input name="industry" value="${esc(org.industry || '')}" required maxlength="80"></label></div><button class="btn btn-primary">Save changes</button></form>` : '<p>Your owner or admin manages business settings.</p>'}</section><section class="panel"><h2>Your workspaces</h2><p>Each business has its own policies, templates, tickets and team.</p>${account.memberships.map((m) => `<div class="setting-row"><div><h3>${esc(m.name)}</h3><p>${esc(m.industry)} · ${esc(m.role)}${m.is_demo ? ' · Sample workspace' : ''}</p></div>${m.id === org?.id ? '<span class="badge badge-review">Current</span>' : `<button class="btn" data-switch="${esc(m.id)}">Switch workspace</button>`}</div>`).join('')}<button class="btn" data-action="${org?.is_demo ? 'register-business' : 'new-workspace'}" style="margin-top:18px">${icon('plus')}${org?.is_demo ? 'Register your business' : 'Create another business'}</button></section><section class="panel"><h2>How replies work</h2><p>Current policies are retrieved only from this workspace. Your selected template wraps the verified excerpts. An employee reviews every reply before copying it to a customer.</p><div class="notice-card">${icon('info')}Customer account and order systems are not connected to new workspaces. Requests that need live account facts require a human check. Approved replies are saved here; they are not sent automatically.</div></section>${canManage() ? `<section class="panel"><h2>Business data</h2><p>Owners can export the workspace’s requests, knowledge, routing and review history.</p><button class="btn" data-action="export-workspace">Export workspace JSON</button></section><section class="panel"><h2>Launch readiness</h2><p>Configuration checks help the service operator identify setup that still needs to be completed.</p><button class="btn" data-action="launch-status">Check launch setup</button></section><section class="panel"><h2>Recent workspace activity</h2><div class="table-scroll"><table class="data-table"><thead><tr><th>Action</th><th>When</th><th>Details</th></tr></thead><tbody>${state.audit.map((a) => `<tr><td>${esc(a.action.replaceAll('_', ' '))}</td><td>${fmtDate(a.created_at)}</td><td><code>${esc(JSON.stringify(a.details))}</code></td></tr>`).join('') || '<tr><td colspan="3">Activity will appear as your team uses the workspace.</td></tr>'}</tbody></table></div></section>` : ''}`;
+  return `${heading('Workspace settings', 'A home for your business and your team.')}<section class="panel"><h2>${esc(businessName())}</h2><p>${esc(org?.role || 'No workspace')} access · ${esc(account.user.email)}</p>${org && canManage() ? `<form id="workspace-settings"><div class="form-grid"><label class="field">Business name<input name="name" value="${esc(org.name)}" required minlength="2" maxlength="120"></label><label class="field">Industry<input name="industry" value="${esc(org.industry || '')}" required maxlength="80"></label></div><button class="btn btn-primary">Save changes</button></form>` : '<p>Your owner or admin manages business settings.</p>'}</section><section class="panel"><h2>Your workspaces</h2><p>Each business has its own policies, templates, tickets and team.</p>${account.memberships.map((m) => `<div class="setting-row"><div><h3>${esc(m.name)}</h3><p>${esc(m.industry)} · ${esc(m.role)}${m.is_demo ? ' · Sample workspace' : ''}</p></div>${m.id === org?.id ? '<span class="badge badge-review">Current</span>' : `<button class="btn" data-switch="${esc(m.id)}">Switch workspace</button>`}</div>`).join('')}<button class="btn" data-action="${org?.is_demo ? 'register-business' : 'new-workspace'}" style="margin-top:18px">${icon('plus')}${org?.is_demo ? 'Register your business' : 'Create another business'}</button></section><section class="panel"><h2>Your account and data</h2><p>Download your account information or record a deletion request for operator review. Shared business records are handled separately.</p><button class="btn" data-action="export-account">Export my account</button> <button class="btn" data-action="email-deliveries">Email delivery status</button> <button class="btn" data-action="request-deletion">Request account deletion</button></section><section class="panel"><h2>How replies work</h2><p>Current policies are retrieved only from this workspace. Your selected template wraps the verified excerpts. An employee reviews every reply before copying it to a customer.</p><div class="notice-card">${icon('info')}Customer account and order systems are not connected to new workspaces. Requests that need live account facts require a human check. Approved replies are saved here; they are not sent automatically.</div></section>${canManage() ? `<section class="panel"><h2>Business data</h2><p>Owners can export the workspace’s requests, knowledge, routing and review history.</p><button class="btn" data-action="export-workspace">Export workspace JSON</button></section><section class="panel"><h2>Launch readiness</h2><p>Configuration checks help the service operator identify setup that still needs to be completed.</p><button class="btn" data-action="launch-status">Check launch setup</button> <button class="btn" data-action="operations-status">Background jobs</button></section><section class="panel"><h2>Recent workspace activity</h2><div class="table-scroll"><table class="data-table"><thead><tr><th>Action</th><th>When</th><th>Details</th></tr></thead><tbody>${state.audit.map((a) => `<tr><td>${esc(a.action.replaceAll('_', ' '))}</td><td>${fmtDate(a.created_at)}</td><td><code>${esc(JSON.stringify(a.details))}</code></td></tr>`).join('') || '<tr><td colspan="3">Activity will appear as your team uses the workspace.</td></tr>'}</tbody></table></div></section>` : ''}`;
 }
 function policyEditor(source = null, upload = false) {
   modal(
@@ -931,7 +931,7 @@ function demoAccessSection() {
 function demoBudgetBanner() {
   if (!config.demo_release || isDemo) return '';
   const b = state.billing || {};
-  return `<div class="info-strip demo-release-strip" role="status">${icon(b.limit_reached ? 'warning' : 'info')}<div><strong>${b.limit_reached ? 'Demo AI allowance reached' : 'Demo version · purchasing coming soon'}</strong><p>${b.limit_reached ? esc(b.message) : `Your account includes $${Number(b.limit_usd || config.demo_ai_budget_usd || 5).toFixed(2)} of one-time AI usage. We’ll email you when purchasing launches if you reach the limit or ask to be notified.`}</p></div><a class="btn" href="#billing">View AI usage</a></div>`;
+  return `<div class="info-strip demo-release-strip" role="status">${icon(b.limit_reached ? 'warning' : 'info')}<div><strong>${b.limit_reached ? 'Demo AI allowance reached' : 'Demo version · purchasing coming soon'}</strong><p>${b.limit_reached ? esc(b.message) : `Your account includes $${Number(b.limit_usd || config.demo_ai_budget_usd || 5).toFixed(2)} of one-time AI usage. ${b.launch_email_opt_out ? 'You’ve opted out of launch emails. You can change this in AI usage.' : 'We’ll email you when purchasing launches if you reach the limit or ask to be notified.'}`}</p></div><a class="btn" href="#billing">View AI usage</a></div>`;
 }
 function demoUsagePage() {
   const b = state.billing || {},
@@ -942,7 +942,7 @@ function demoUsagePage() {
         minimumFractionDigits: 2,
         maximumFractionDigits: 6,
       });
-  return `${heading('Demo AI usage', 'A one-time allowance per account, shared across all your workspaces.')}<div class="metrics-row">${metric('AI allowance', money(b.limit_usd || config.demo_ai_budget_usd || 5), 'No monthly reset or expiry', 'grid')}${metric('Model usage', money(b.spent_usd), 'Embeddings, agent and verifier', 'spark')}${metric('Available now', money(b.remaining_usd), `${money(b.reserved_usd)} reserved by running work`, 'activity')}</div><section class="panel"><h2>${b.limit_reached ? 'Your demo AI allowance is used' : 'Your workspace is in demo'}</h2><p>${esc(b.message || 'Purchasing will be available soon.')}</p><div class="notice-card">${icon('info')}Only paid model operations use this allowance. Creating and reviewing requests, managing your team, editing templates and reading knowledge remain available. Costs are estimated from provider token usage and configured prices; unknown provider charges retain a reserve until reconciled.</div></section><section class="panel"><h2>Purchasing is coming soon</h2><p>${b.launch_email_requested ? `You’re on the launch notification list. We’ll email ${esc(account.user.email)} when purchasing becomes available.` : 'Ask for an email when purchasing becomes available. You can also keep exploring the demo.'}</p>${b.launch_email_requested ? '<span class="badge badge-review">Launch email requested</span>' : '<button class="btn btn-primary" data-action="notify-launch">Email me at launch</button>'}</section>`;
+  return `${heading('Demo AI usage', 'A one-time allowance per account, shared across all your workspaces.')}<div class="metrics-row">${metric('AI allowance', money(b.limit_usd || config.demo_ai_budget_usd || 5), 'No monthly reset or expiry', 'grid')}${metric('Model usage', money(b.spent_usd), 'Embeddings, agent and verifier', 'spark')}${metric('Available now', money(b.remaining_usd), `${money(b.reserved_usd)} reserved by running work`, 'activity')}</div><section class="panel"><h2>${b.limit_reached ? 'Your demo AI allowance is used' : 'Your workspace is in demo'}</h2><p>${esc(b.message || 'Purchasing will be available soon.')}</p><div class="notice-card">${icon('info')}Only paid model operations use this allowance. Creating and reviewing requests, managing your team, editing templates and reading knowledge remain available. Costs are estimated from provider token usage and configured prices; unknown provider charges retain a reserve until reconciled.</div></section><section class="panel"><h2>Purchasing is coming soon</h2><p>${b.launch_email_requested ? `You’re on the launch notification list. We’ll email ${esc(account.user.email)} when purchasing becomes available.` : b.launch_email_opt_out ? 'You’ve opted out of launch emails. You can ask to be notified again at any time.' : 'Ask for an email when purchasing becomes available. You can also keep exploring the demo.'}</p>${b.launch_email_requested ? '<span class="badge badge-review">Launch email requested</span> <button class="btn" data-action="cancel-launch-notification">Cancel launch email</button>' : '<button class="btn btn-primary" data-action="notify-launch">Email me at launch</button>'}</section>`;
 }
 function planCards(inWorkspace = true) {
   return `<div class="pricing-grid">${state.plans
@@ -1011,6 +1011,46 @@ async function businessAction(el) {
     return true;
   }
   switch (el.dataset.action) {
+    case 'cancel-launch-notification':
+      await request('/demo/launch-notification', { method: 'DELETE' });
+      await reload();
+      render();
+      toast('Launch notification cancelled.');
+      return true;
+    case 'export-account':
+      download('supportops-account.json', await request('/account/export'));
+      return true;
+    case 'email-deliveries': {
+      const jobs = await request('/auth/email-deliveries');
+      modal(
+        'Your account emails',
+        'Delivery attempts are retained across server restarts.',
+        `<div class="check-list">${jobs.map((j) => `<div class="check-item"><span><b>${esc(j.purpose === 'verify' ? 'Email verification' : 'Password recovery')}</b><br>${esc(j.status)} · ${j.attempts} attempt(s) · ${fmtDate(j.created_at)}${j.error === 'smtp_not_configured' ? '<br>The service operator must finish email setup.' : ''}</span></div>`).join('') || '<p>No account emails have been requested.</p>'}</div>`,
+        true,
+      );
+      return true;
+    }
+    case 'request-deletion':
+      modal(
+        'Request account deletion',
+        'This records a request for operator review. It does not immediately erase shared company records.',
+        '<form id="privacy-request"><label class="field">Current password<input name="password" type="password" required maxlength="128" autocomplete="current-password"></label><div class="form-error" role="alert"></div><div class="modal-actions"><button class="btn" type="button" data-action="close-modal">Cancel</button><button class="btn btn-primary">Record deletion request</button></div></form>',
+      );
+      return true;
+    case 'operations-status': {
+      const r = await request('/operations/status');
+      const counts = (jobs) =>
+        Object.entries(jobs)
+          .map(([name, count]) => esc(name + ': ' + count))
+          .join(' · ') || 'No jobs recorded';
+      modal(
+        'Background jobs',
+        'Status for this workspace and your account.',
+        `<div class="check-list"><div class="check-item"><span><b>Background worker</b><br>${r.worker.healthy ? 'Reporting a recent heartbeat' : 'No recent worker heartbeat. The operator should check the worker.'}</span></div><div class="check-item"><span><b>Knowledge indexing</b><br>${counts(r.knowledge_jobs)}</span></div><div class="check-item"><span><b>Your account emails</b><br>${counts(r.your_email_jobs)}</span></div><div class="check-item"><span><b>Unsettled AI reservations</b><br>${r.your_unsettled_ai_reservations}</span></div></div>`,
+        true,
+      );
+      return true;
+    }
     case 'notify-launch':
       await request('/demo/launch-notification', { method: 'POST' });
       await reload();
@@ -1040,7 +1080,11 @@ async function businessAction(el) {
       return true;
     case 'verify-email':
       await request('/auth/verification-email', { method: 'POST' });
-      toast('Verification email requested. Check your inbox.');
+      toast(
+        config.email_delivery_enabled
+          ? 'Verification email queued. Check your delivery status if it does not arrive.'
+          : 'Verification email queued. The operator must finish email setup before delivery.',
+      );
       return true;
     case 'new-intake':
       modal(
@@ -1083,7 +1127,15 @@ async function businessAction(el) {
   return false;
 }
 async function businessSubmit(form) {
-  if (!['request-type-form', 'intake-form', 'routing-form', 'account-recovery'].includes(form.id))
+  if (
+    ![
+      'request-type-form',
+      'intake-form',
+      'routing-form',
+      'account-recovery',
+      'privacy-request',
+    ].includes(form.id)
+  )
     return false;
   const button = form.querySelector('.btn-primary'),
     error = form.querySelector('.form-error');
@@ -1091,6 +1143,12 @@ async function businessSubmit(form) {
   if (error) error.textContent = '';
   try {
     const data = Object.fromEntries(new FormData(form));
+    if (form.id === 'privacy-request') {
+      const result = await request('/account/deletion-request', { method: 'POST', body: data });
+      closeModal();
+      toast(result.message);
+      return true;
+    }
     if (form.id === 'request-type-form') {
       data.active = data.active === 'true';
       await request('/request-types' + (form.dataset.id ? '/' + form.dataset.id : ''), {
