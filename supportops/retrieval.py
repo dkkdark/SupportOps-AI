@@ -24,28 +24,46 @@ def embed(text: str) -> list[float]:
     return [x / norm for x in vector]
 
 
-def active_documents(session, on: date | None = None):
+def active_documents(
+    session, on: date | None = None, organization_id: str | None = None
+):
+    if not organization_id:
+        raise ValueError("organization_required")
     day = (on or date.today()).isoformat()
     docs = session.scalars(
         select(Document).where(
+            Document.organization_id == organization_id,
+            Document.enabled.is_(True),
             Document.effective_from <= day,
             (Document.effective_to.is_(None)) | (Document.effective_to > day),
         )
     ).all()
-    counts = Counter(d.key for d in docs)
-    if any(n > 1 for n in counts.values()):
+    versions = {}
+    for d in docs:
+        versions.setdefault(d.key, set()).add(d.version)
+    if any(len(v) > 1 for v in versions.values()):
         raise ValueError("conflicting_documents")
     return docs
 
 
-def retrieve(session, query: str, categories: list[str], on: date | None = None):
-    docs = active_documents(session, on)
+def retrieve(
+    session,
+    query: str,
+    categories: list[str],
+    on: date | None = None,
+    organization_id: str | None = None,
+    require_lexical: bool = False,
+):
+    docs = active_documents(session, on, organization_id)
     q = embed(query)
     # PostgreSQL uses pgvector cosine ordering; SQLite mirrors the same distance in Python.
     if session.bind.dialect.name == "postgresql":
         ordered = session.scalars(
             select(Document)
-            .where(Document.id.in_([d.id for d in docs]))
+            .where(
+                Document.organization_id == organization_id,
+                Document.id.in_([d.id for d in docs]),
+            )
             .order_by(cast(Document.embedding, Vector(128)).cosine_distance(q))
         ).all()
         ranks = {d.id: i for i, d in enumerate(ordered)}
@@ -59,14 +77,61 @@ def retrieve(session, query: str, categories: list[str], on: date | None = None)
     scored = []
     for doc in docs:
         hits = sum(tag in query.lower() for tag in doc.tags)
+        lexical = len(
+            terms(query) & terms(doc.title + " " + doc.text + " " + " ".join(doc.tags))
+        )
+        if require_lexical and not lexical:
+            continue
         score = (
             (4 if doc.category in categories else 0)
             + hits * 3
+            + (lexical * 2 if require_lexical else 0)
             + 1 / (1 + ranks[doc.id])
         )
-        if doc.category in categories or hits:
+        if doc.category in categories or hits or (require_lexical and lexical):
             scored.append((score, doc))
     return [d for _, d in sorted(scored, key=lambda x: -x[0])[:6]]
+
+
+def terms(text):
+    stop = {
+        "the",
+        "and",
+        "for",
+        "with",
+        "your",
+        "our",
+        "you",
+        "what",
+        "how",
+        "can",
+        "could",
+        "would",
+        "please",
+        "this",
+        "that",
+        "have",
+        "about",
+        "does",
+        "need",
+        "help",
+        "hello",
+        "thanks",
+        "order",
+        "item",
+        "business",
+        "support",
+        "policy",
+        "policies",
+        "from",
+        "are",
+        "will",
+    }
+    return {
+        w.rstrip("s")
+        for w in re.findall(r"[a-zа-яё]{3,}", text.casefold())
+        if w not in stop
+    }
 
 
 def serialize_document(d):
@@ -74,6 +139,7 @@ def serialize_document(d):
         k: getattr(d, k)
         for k in (
             "id",
+            "source_id",
             "key",
             "title",
             "category",

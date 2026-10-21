@@ -6,6 +6,7 @@ Category = Literal["delivery", "cancellation", "returns", "damage", "payment", "
 
 
 class TicketInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     customer: str = Field(min_length=2, max_length=100)
     email: str = Field(
         default="", max_length=160, pattern=r"^$|^[^\s@]+@[^\s@]+\.[^\s@]+$"
@@ -15,6 +16,7 @@ class TicketInput(BaseModel):
     order_id: str | None = Field(default=None, pattern=r"^\d{4,12}$")
     channel: Literal["email", "chat", "web"] = "email"
     priority: Literal["normal", "high"] = "normal"
+    template_id: str | None = Field(default=None, max_length=40)
 
 
 class Order(BaseModel):

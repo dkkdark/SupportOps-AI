@@ -23,7 +23,7 @@ def test_return_eligibility_uses_the_current_policy_window(client):
     from supportops.db import Document
 
     with client.app.state.sessions() as db:
-        rule = db.get(Document, "returns-v1")
+        rule = db.get(Document, (client.organization_id, "returns-v1"))
         rule.facts = {
             "return_window": "You can request a return within 1 calendar days after delivery."
         }

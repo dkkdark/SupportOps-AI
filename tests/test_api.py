@@ -2,7 +2,7 @@ import httpx
 from fastapi.testclient import TestClient
 from supportops.config import Settings
 from supportops.main import create_app
-from tests.conftest import orders_handler
+from tests.conftest import orders_handler, sign_in_demo
 
 
 def test_create_validation_and_idempotency(client, payload):
@@ -31,14 +31,15 @@ def test_create_validation_and_idempotency(client, payload):
 
 def test_auth_and_faults_disabled(tmp_path, orders):
     app = create_app(
-        Settings(database_url=f"sqlite:///{tmp_path}/auth.db", app_api_key="test-key"),
+        Settings(database_url=f"sqlite:///{tmp_path}/auth.db"),
         orders_transport=httpx.MockTransport(orders_handler(orders)),
     )
     with TestClient(app) as c:
         assert c.get("/api/tickets").status_code == 401
         assert (
-            c.get("/api/tickets", headers={"X-API-Key": "test-key"}).status_code == 200
+            c.get("/api/tickets", headers={"X-API-Key": "test-key"}).status_code == 401
         )
+        sign_in_demo(c)
         assert (
             c.post(
                 "/api/tickets/SO-1284/analyze",
@@ -60,8 +61,12 @@ def test_persistent_checkpoint_survives_restart(tmp_path, orders):
         )
 
     with TestClient(make()) as c:
+        sign_in_demo(c)
+        cookies, headers = dict(c.cookies), dict(c.headers)
         t = c.post("/api/tickets/SO-1284/analyze", json={}).json()
     with TestClient(make()) as c:
+        c.cookies.update(cookies)
+        c.headers.update(headers)
         state = c.app.state.graph.get_state(
             {"configurable": {"thread_id": t["result"]["thread_id"]}}
         )
@@ -90,7 +95,8 @@ def test_unhealthy_dependency_returns_503(tmp_path):
         )
     ) as c:
         assert c.get("/health/live").status_code == 200
-        assert c.get("/health/ready").status_code == 503
+        assert c.get("/health/ready").status_code == 200
+        sign_in_demo(c)
         assert (
             c.post("/api/tickets/SO-1284/analyze", json={}).json()["result"]["reason"]
             == "orders_unavailable"

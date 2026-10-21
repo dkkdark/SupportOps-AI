@@ -13,6 +13,9 @@ from pydantic import ValidationError
 from supportops.retrieval import retrieve, serialize_document, EMBEDDING_VERSION
 from supportops.schemas import ModelSelection, Order
 from supportops.telemetry import step
+from supportops.db import Organization, ReplyTemplate
+from supportops.content import render_template
+from sqlalchemy import select
 
 PROMPT = (Path(__file__).parent / "prompts/selection-v1.txt").read_text()
 PROMPT_VERSION = "selection-v1-" + hashlib.sha256(PROMPT.encode()).hexdigest()[:12]
@@ -26,6 +29,13 @@ STATUS = {
 
 
 class State(TypedDict, total=False):
+    organization_id: str
+    business_name: str
+    workflow_mode: str
+    agent_name: str
+    template_id: str | None
+    template: dict | None
+    subject: str
     ticket_id: str
     message: str
     customer: str
@@ -136,6 +146,9 @@ def build_graph(
         with step(s, "orders_api"):
             if s.get("reason"):
                 return s
+            if s.get("workflow_mode") != "retail_demo":
+                s["order"] = None
+                return s
             if not s.get("order_id"):
                 s["reason"] = "missing_order_id"
                 return s
@@ -172,12 +185,65 @@ def build_graph(
                 return s
             try:
                 with sessions() as db:
-                    docs = retrieve(db, s["message"], s["categories"])
+                    generic = s.get("workflow_mode") != "retail_demo"
+                    docs = retrieve(
+                        db,
+                        s["message"],
+                        s["categories"],
+                        organization_id=s["organization_id"],
+                        require_lexical=generic,
+                    )
+                    templates = db.scalars(
+                        select(ReplyTemplate)
+                        .where(
+                            ReplyTemplate.organization_id == s["organization_id"],
+                            ReplyTemplate.active.is_(True),
+                        )
+                        .order_by(ReplyTemplate.created_at)
+                    ).all()
+                    chosen = (
+                        next(
+                            (t for t in templates if t.id == s.get("template_id")), None
+                        )
+                        if s.get("template_id")
+                        else next(
+                            (t for t in templates if t.category in s["categories"]),
+                            next((t for t in templates if t.category == "other"), None),
+                        )
+                    )
+                    if s.get("template_id") and not chosen:
+                        s["reason"] = "template_unavailable"
+                        return s
+                    s["template"] = (
+                        {
+                            "id": chosen.id,
+                            "revision": chosen.revision,
+                            "body": chosen.body,
+                        }
+                        if chosen
+                        else None
+                    )
                 s["sources"] = [serialize_document(d) for d in docs]
                 if s.get("fault") == "missing_sources":
                     s["sources"] = []
                 if not s["sources"]:
                     s["reason"] = "missing_sources"
+                    return s
+                if generic:
+                    # Ordinary businesses use only their uploaded policies. No shared store API.
+                    s["sources"] = s["sources"][:3]
+                    s["facts"] = {
+                        k: v for d in s["sources"] for k, v in d["facts"].items()
+                    }
+                    s["required"] = list(s["facts"])[:12]
+                    if not s["facts"]:
+                        s["reason"] = "missing_sources"
+                    elif s.get("order_id") and re.search(
+                        r"where|tracking|cancel my|payment status|charged twice|где|трек|списали",
+                        s["message"],
+                        re.I,
+                    ):
+                        s["reason"] = "order_integration_not_connected"
                     return s
                 order = s["order"]
                 source_facts = {
@@ -350,8 +416,22 @@ def build_graph(
                     + "\n\n".join(
                         s["facts"][k] for k in dict.fromkeys(selection.fact_ids)
                     )
-                    + "\n\nPlease let us know if you need help with the next steps.\nWarm regards, the Listva team"
+                    + f"\n\nPlease let us know if you need help with the next steps.\nWarm regards, the {s['business_name']} team"
                 )
+                if s.get("template"):
+                    s["draft"] = render_template(
+                        s["template"]["body"],
+                        {
+                            "facts": "\n\n".join(
+                                s["facts"][k] for k in dict.fromkeys(selection.fact_ids)
+                            ),
+                            "customer_name": s["customer"],
+                            "business_name": s["business_name"],
+                            "agent_name": s["agent_name"],
+                            "subject": s.get("subject", ""),
+                            "ticket_id": s["ticket_id"],
+                        },
+                    )
         return s
 
     def validation(s):
@@ -359,8 +439,12 @@ def build_graph(
             ids = set(s.get("selection", {}).get("fact_ids", []))
             s["checks"] = [
                 {
-                    "label": "Order details verified against the API",
-                    "passed": bool(s.get("order")),
+                    "label": "Order details verified against the API"
+                    if s.get("workflow_mode") == "retail_demo"
+                    else "No unverified live account facts claimed",
+                    "passed": bool(s.get("order"))
+                    if s.get("workflow_mode") == "retail_demo"
+                    else not s.get("order"),
                 },
                 {"label": "Current policies applied", "passed": bool(s.get("sources"))},
                 {
@@ -390,6 +474,10 @@ def build_graph(
                 "documents": {d["id"]: d["version"] for d in s.get("sources", [])},
                 "embedding": EMBEDDING_VERSION,
                 "evaluation": "supportops-eval-v2-en",
+                "organization_id": s["organization_id"],
+                "template": {k: s["template"][k] for k in ("id", "revision")}
+                if s.get("template")
+                else None,
             }
         return s
 

@@ -1,4 +1,4 @@
-import hmac
+import hashlib
 import json
 import logging
 import time
@@ -6,17 +6,30 @@ import uuid
 from contextlib import ExitStack, asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-import httpx
+from urllib.parse import urlparse
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from langgraph.types import Command
 from opentelemetry import trace
-from sqlalchemy import func, select, text, update
+from sqlalchemy import select, text, update
 from sqlalchemy.exc import IntegrityError
+from supportops.auth import Auth, Identity, audit
 from supportops.config import Settings, settings
-from supportops.db import Base, Document, Review, Ticket, make_database, utcnow
-from supportops.retrieval import embed, serialize_document
+from supportops.content import content_router
+from supportops.db import (
+    Document,
+    KnowledgeSource,
+    Organization,
+    ReplyTemplate,
+    Review,
+    Ticket,
+    make_database,
+    utcnow,
+)
+from supportops.migration import migrate
+from supportops.retrieval import embed
 from supportops.schemas import AnalyzeInput, ReviewInput, Rule, TicketInput
 from supportops.telemetry import configure
 from supportops.workflow import build_graph
@@ -42,6 +55,7 @@ def ticket_dict(ticket):
         "category",
         "result",
         "revision",
+        "template_id",
     )
     return {
         **{key: getattr(ticket, key) for key in fields},
@@ -50,22 +64,61 @@ def ticket_dict(ticket):
     }
 
 
-def seed(sessions):
-    with sessions() as db:
-        if not db.scalar(select(func.count()).select_from(Document)):
-            for raw in json.loads((ROOT / "data/knowledge/policies.json").read_text()):
-                d = Rule.model_validate(raw)
-                db.add(
-                    Document(
-                        **d.model_dump(),
-                        embedding=embed(d.text + " " + " ".join(d.tags)),
-                    )
-                )
-        if not db.scalar(select(func.count()).select_from(Ticket)):
-            for raw in json.loads((ROOT / "data/tickets.json").read_text()):
-                raw["created_at"] = datetime.fromisoformat(raw["created_at"])
-                db.add(Ticket(**raw))
-        db.commit()
+def seed_demo(db, organization_id):
+    for raw in json.loads((ROOT / "data/knowledge/policies.json").read_text()):
+        d = Rule.model_validate(raw)
+        db.add(
+            KnowledgeSource(
+                organization_id=organization_id,
+                **d.model_dump(),
+                file_name="demo-policies.json",
+                content_hash=hashlib.sha256(d.text.encode()).hexdigest(),
+                archived=False,
+            )
+        )
+        db.flush()
+        db.add(
+            Document(
+                organization_id=organization_id,
+                **d.model_dump(),
+                source_id=d.id,
+                enabled=True,
+                embedding=embed(d.text + " " + " ".join(d.tags)),
+            )
+        )
+    for raw in json.loads((ROOT / "data/tickets.json").read_text()):
+        raw["created_at"] = datetime.fromisoformat(raw["created_at"])
+        db.add(Ticket(organization_id=organization_id, **raw))
+    db.flush()
+
+
+class RequestBodyLimit:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        seen = 0
+        headers = dict(scope.get("headers", []))
+        try:
+            length = int(headers.get(b"content-length", b"0"))
+        except ValueError:
+            length = 0
+        if length > 3 * 1024 * 1024:
+            return await JSONResponse(
+                {"detail": "Request exceeds 3 MB."}, status_code=413
+            )(scope, receive, send)
+
+        async def limited():
+            nonlocal seen
+            message = await receive()
+            seen += len(message.get("body", b""))
+            if seen > 3 * 1024 * 1024:
+                raise HTTPException(413, "Request exceeds 3 MB.")
+            return message
+
+        await self.app(scope, limited, send)
 
 
 def create_app(
@@ -73,14 +126,12 @@ def create_app(
 ):
     config = config or settings()
     engine, sessions = make_database(config.database_url)
+    auth = Auth(config, sessions)
 
     @asynccontextmanager
     async def lifespan(app):
-        if config.app_env == "production" and not config.app_api_key:
-            raise RuntimeError("APP_API_KEY is required in production")
         if config.app_env != "production":
-            Base.metadata.create_all(engine)
-        seed(sessions)
+            migrate(engine)
         configure(config)
         with ExitStack() as stack:
             if config.database_url.startswith("postgresql"):
@@ -96,23 +147,65 @@ def create_app(
             else:
                 from langgraph.checkpoint.sqlite import SqliteSaver
 
-                cp_path = str(engine.url.database) + ".checkpoints"
-                cp = stack.enter_context(SqliteSaver.from_conn_string(cp_path))
+                cp = stack.enter_context(
+                    SqliteSaver.from_conn_string(
+                        str(engine.url.database) + ".checkpoints"
+                    )
+                )
             cp.setup()
             app.state.graph = build_graph(
                 config, sessions, cp, orders_transport, llm_transport
             )
             app.state.sessions = sessions
+            app.state.auth = auth
             yield
         engine.dispose()
 
-    app = FastAPI(title="SupportOps AI", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(
+        title="SupportOps AI · Business support platform",
+        version="0.2.0",
+        lifespan=lifespan,
+    )
+    app.add_middleware(RequestBodyLimit)
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request, exc):
+        # Do not echo passwords or customer content inside validation responses.
+        return JSONResponse(
+            {
+                "detail": [
+                    {"loc": e["loc"], "msg": e["msg"], "type": e["type"]}
+                    for e in exc.errors()
+                ]
+            },
+            status_code=422,
+        )
+
+    @app.exception_handler(IntegrityError)
+    async def integrity_error(request, exc):
+        return JSONResponse(
+            {
+                "detail": "This record already exists or changed concurrently. Refresh and try again."
+            },
+            status_code=409,
+        )
 
     @app.middleware("http")
-    async def headers(request, call_next):
-        request_id = uuid.uuid4().hex
+    async def security_headers(request, call_next):
+        origin = request.headers.get("origin")
+        if request.method not in ("GET", "HEAD", "OPTIONS") and origin:
+            parsed = urlparse(origin)
+            if (
+                parsed.netloc != request.headers.get("host")
+                or parsed.scheme not in ("http", "https")
+                or (config.app_env == "production" and parsed.scheme != "https")
+            ):
+                return JSONResponse(
+                    {"detail": "Cross-origin requests are not allowed."},
+                    status_code=403,
+                )
         response = await call_next(request)
-        response.headers["X-Request-ID"] = request_id
+        response.headers["X-Request-ID"] = uuid.uuid4().hex
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "same-origin"
         if request.url.path.startswith("/api/"):
@@ -122,16 +215,13 @@ def create_app(
         )
         return response
 
-    def authorize(x_api_key: str = Header(default="")):
-        if config.app_api_key and not hmac.compare_digest(
-            x_api_key, config.app_api_key
-        ):
-            raise HTTPException(401, "invalid_api_key")
+    app.include_router(auth.router(seed_demo))
+    app.include_router(content_router(auth, sessions))
 
-    def find(db, id):
-        item = db.get(Ticket, id)
+    def find(db, actor, id):
+        item = db.get(Ticket, (actor.organization_id, id))
         if not item:
-            raise HTTPException(404, "ticket_not_found")
+            raise HTTPException(404, "Ticket not found.")
         return item
 
     @app.get("/health/live")
@@ -143,63 +233,84 @@ def create_app(
         try:
             with sessions() as db:
                 db.execute(text("SELECT 1"))
-            with httpx.Client(
-                transport=orders_transport, timeout=config.orders_timeout_seconds
-            ) as client:
-                client.get(config.orders_api_url + "/health/live").raise_for_status()
-            return {"status": "ready"}
+            return {"status": "ready", "database": "ok"}
         except Exception:
-            raise HTTPException(503, "dependency_unavailable")
+            raise HTTPException(503, "Database unavailable.")
 
     @app.get("/api/config")
     def public_config():
         return {
             "mode": "api",
             "provider": config.model_provider,
-            "auth_required": bool(config.app_api_key),
+            "auth_required": True,
             "faults_enabled": config.fault_injection_enabled,
-            "version": "0.1.0",
-            "store": "Listva",
+            "demo_available": config.app_env != "production"
+            or config.allow_demo_signup,
+            "version": "0.2.0",
+            "platform": "SupportOps AI",
         }
 
-    deps = [Depends(authorize)]
-
-    @app.get("/api/tickets", dependencies=deps)
-    def tickets():
+    @app.get("/api/tickets")
+    def tickets(actor: Identity = Depends(auth.current)):
         with sessions() as db:
             return [
                 ticket_dict(t)
                 for t in db.scalars(
-                    select(Ticket).order_by(Ticket.created_at.desc())
+                    select(Ticket)
+                    .where(Ticket.organization_id == actor.organization_id)
+                    .order_by(Ticket.created_at.desc())
                 ).all()
             ]
 
-    @app.post("/api/tickets", status_code=201, dependencies=deps)
+    @app.post("/api/tickets", status_code=201)
     def create_ticket(
         body: TicketInput,
         idempotency_key: str | None = Header(default=None, max_length=100),
+        actor: Identity = Depends(auth.current),
     ):
         with sessions() as db:
+            if body.template_id:
+                template = db.get(
+                    ReplyTemplate, (actor.organization_id, body.template_id)
+                )
+                if not template or not template.active:
+                    raise HTTPException(
+                        422, "Choose an active template from this workspace."
+                    )
             if idempotency_key:
                 old = db.scalar(
-                    select(Ticket).where(Ticket.idempotency_key == idempotency_key)
+                    select(Ticket).where(
+                        Ticket.organization_id == actor.organization_id,
+                        Ticket.idempotency_key == idempotency_key,
+                    )
                 )
                 if old:
                     if any(getattr(old, k) != v for k, v in body.model_dump().items()):
                         raise HTTPException(409, "idempotency_key_reused")
                     return ticket_dict(old)
             item = Ticket(
+                organization_id=actor.organization_id,
                 id="SO-" + uuid.uuid4().hex[:8].upper(),
+                created_by=actor.user_id,
                 **body.model_dump(),
                 idempotency_key=idempotency_key,
             )
             db.add(item)
             try:
+                db.flush()
+                audit(db, actor, "ticket.created", {"ticket_id": item.id})
                 db.commit()
             except IntegrityError:
                 db.rollback()
-                old = db.scalar(
-                    select(Ticket).where(Ticket.idempotency_key == idempotency_key)
+                old = (
+                    db.scalar(
+                        select(Ticket).where(
+                            Ticket.organization_id == actor.organization_id,
+                            Ticket.idempotency_key == idempotency_key,
+                        )
+                    )
+                    if idempotency_key
+                    else None
                 )
                 if old and all(
                     getattr(old, k) == v for k, v in body.model_dump().items()
@@ -208,12 +319,17 @@ def create_app(
                 raise HTTPException(409, "idempotency_conflict")
             return ticket_dict(item)
 
-    @app.get("/api/tickets/{id}", dependencies=deps)
-    def get_ticket(id: str):
+    @app.get("/api/tickets/{id}")
+    def get_ticket(id: str, actor: Identity = Depends(auth.current)):
         with sessions() as db:
-            t = find(db, id)
+            t = find(db, actor, id)
             reviews = db.scalars(
-                select(Review).where(Review.ticket_id == id).order_by(Review.created_at)
+                select(Review)
+                .where(
+                    Review.organization_id == actor.organization_id,
+                    Review.ticket_id == id,
+                )
+                .order_by(Review.created_at)
             ).all()
             return {
                 **ticket_dict(t),
@@ -230,33 +346,44 @@ def create_app(
                 ],
             }
 
-    @app.post("/api/tickets/{id}/analyze", dependencies=deps)
-    def analyze(id: str, body: AnalyzeInput):
-        if body.fault != "none" and not config.fault_injection_enabled:
-            raise HTTPException(403, "fault_injection_disabled")
+    @app.post("/api/tickets/{id}/analyze")
+    def analyze(id: str, body: AnalyzeInput, actor: Identity = Depends(auth.current)):
+        if body.fault != "none" and (
+            not config.fault_injection_enabled or not actor.organization["is_demo"]
+        ):
+            raise HTTPException(
+                403, "Fault scenarios are available only in enabled demo workspaces."
+            )
         with sessions() as db:
-            t = find(db, id)
+            t = find(db, actor, id)
             if t.status in ("approved", "escalated", "review"):
                 return ticket_dict(t)
             if t.status == "processing" and t.updated_at.replace(
                 tzinfo=timezone.utc
             ) > utcnow() - timedelta(seconds=90):
                 raise HTTPException(409, "analysis_in_progress")
-            previous_revision = t.revision
             if not db.execute(
                 update(Ticket)
-                .where(Ticket.id == id, Ticket.revision == previous_revision)
+                .where(
+                    Ticket.organization_id == actor.organization_id,
+                    Ticket.id == id,
+                    Ticket.revision == t.revision,
+                )
                 .values(
-                    status="processing",
-                    revision=previous_revision + 1,
-                    updated_at=utcnow(),
+                    status="processing", revision=t.revision + 1, updated_at=utcnow()
                 )
             ).rowcount:
                 raise HTTPException(409, "revision_conflict")
             db.commit()
             db.refresh(t)
-            thread = f"{id}:{t.revision}"
+            thread = f"{actor.organization_id}:{id}:{t.revision}"
             initial = {
+                "organization_id": actor.organization_id,
+                "business_name": actor.organization["name"],
+                "workflow_mode": actor.organization["workflow_mode"],
+                "agent_name": actor.name,
+                "subject": t.subject,
+                "template_id": t.template_id,
                 "ticket_id": id,
                 "customer": t.customer,
                 "message": t.message,
@@ -276,15 +403,15 @@ def create_app(
                     "ticket.analyze"
                 ) as span:
                     span.set_attribute("ticket.id", id)
+                    span.set_attribute("organization.id", actor.organization_id)
                     initial["trace_id"] = format(
                         span.get_span_context().trace_id, "032x"
                     )
                     result = app.state.graph.invoke(
                         initial, config={"configurable": {"thread_id": thread}}
                     )
-                result.pop("__interrupt__", None)
-                result.pop("message", None)
-                result.pop("customer", None)
+                for key in ("__interrupt__", "message", "customer"):
+                    result.pop(key, None)
                 result["duration_ms"] = round((time.perf_counter() - started) * 1000, 2)
                 result["thread_id"] = thread
                 t.result = result
@@ -293,7 +420,10 @@ def create_app(
                 t.status = "manual" if result.get("reason") else "review"
             except Exception as exc:
                 logging.error(
-                    "workflow_failed ticket_id=%s error_type=%s", id, type(exc).__name__
+                    "workflow_failed organization_id=%s ticket_id=%s error_type=%s",
+                    actor.organization_id,
+                    id,
+                    type(exc).__name__,
                 )
                 t.result = {
                     "reason": "workflow_failed",
@@ -304,13 +434,19 @@ def create_app(
                 }
                 t.status = "manual"
             t.updated_at = utcnow()
+            audit(
+                db,
+                actor,
+                "ticket.analyzed",
+                {"ticket_id": id, "status": t.status, "reason": t.result.get("reason")},
+            )
             db.commit()
             return ticket_dict(t)
 
-    @app.post("/api/tickets/{id}/review", dependencies=deps)
-    def review(id: str, body: ReviewInput):
+    @app.post("/api/tickets/{id}/review")
+    def review(id: str, body: ReviewInput, actor: Identity = Depends(auth.current)):
         with sessions() as db:
-            t = find(db, id)
+            t = find(db, actor, id)
             if t.revision != body.revision or t.status not in ("review", "manual"):
                 raise HTTPException(409, "revision_conflict")
             if body.decision == "approve" and (
@@ -321,6 +457,7 @@ def create_app(
             if not db.execute(
                 update(Ticket)
                 .where(
+                    Ticket.organization_id == actor.organization_id,
                     Ticket.id == id,
                     Ticket.revision == body.revision,
                     Ticket.status.in_(["review", "manual"]),
@@ -330,6 +467,11 @@ def create_app(
                 raise HTTPException(409, "revision_conflict")
             thread = (t.result or {}).get("thread_id")
             if thread:
+                if (
+                    not thread.startswith(actor.organization_id + ":")
+                    and actor.organization_id != "legacy-demo"
+                ):
+                    raise HTTPException(409, "Workflow workspace mismatch.")
                 graph_config = {"configurable": {"thread_id": thread}}
                 snapshot = app.state.graph.get_state(graph_config)
                 if snapshot.next:
@@ -341,30 +483,26 @@ def create_app(
             db.add(
                 Review(
                     id=uuid.uuid4().hex,
+                    organization_id=actor.organization_id,
                     ticket_id=id,
                     decision=body.decision,
                     text=body.text,
                     note=body.note,
+                    actor=actor.name[:80],
+                    actor_id=actor.user_id,
                 )
             )
+            audit(db, actor, "ticket." + status, {"ticket_id": id})
             db.commit()
             db.refresh(t)
             return ticket_dict(t)
 
-    @app.get("/api/knowledge", dependencies=deps)
-    def knowledge():
+    @app.get("/api/metrics")
+    def metrics_view(actor: Identity = Depends(auth.current)):
         with sessions() as db:
-            return [
-                serialize_document(d)
-                for d in db.scalars(
-                    select(Document).order_by(Document.category, Document.title)
-                ).all()
-            ]
-
-    @app.get("/api/metrics", dependencies=deps)
-    def metrics_view():
-        with sessions() as db:
-            items = db.scalars(select(Ticket)).all()
+            items = db.scalars(
+                select(Ticket).where(Ticket.organization_id == actor.organization_id)
+            ).all()
             results = [t.result for t in items if t.result]
             durations = sorted(r["duration_ms"] for r in results if "duration_ms" in r)
             return {
@@ -399,17 +537,15 @@ def create_app(
                 ],
             }
 
-    @app.get("/api/evaluation", dependencies=deps)
-    def evaluation():
+    @app.get("/api/evaluation")
+    def evaluation(actor: Identity = Depends(auth.current)):
         report = ROOT / "reports/evaluation.json"
-        return (
-            json.loads(report.read_text())
-            if report.exists()
-            else {
-                "status": "not_run",
-                "message": "Run python -m eval.run --split holdout",
-            }
-        )
+        if actor.organization["is_demo"] and report.exists():
+            return json.loads(report.read_text())
+        return {
+            "status": "not_run",
+            "message": "No evaluation has been configured for this workspace. Demo benchmarks do not measure your uploaded policies.",
+        }
 
     app.mount("/assets", StaticFiles(directory=WEB), name="assets")
 

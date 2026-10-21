@@ -33,6 +33,20 @@ def orders_handler(orders):
     return handler
 
 
+def sign_in_demo(c):
+    response = c.post("/api/auth/demo")
+    assert response.status_code == 201, response.text
+    account = c.get("/api/auth/me").json()
+    c.headers.update(
+        {
+            "X-CSRF-Token": account["csrf_token"],
+            "X-Workspace-ID": account["organization"]["id"],
+        }
+    )
+    c.organization_id = account["organization"]["id"]
+    return account
+
+
 @pytest.fixture
 def client(tmp_path, orders):
     app = create_app(
@@ -42,6 +56,7 @@ def client(tmp_path, orders):
         orders_transport=httpx.MockTransport(orders_handler(orders)),
     )
     with TestClient(app) as c:
+        sign_in_demo(c)
         yield c
 
 

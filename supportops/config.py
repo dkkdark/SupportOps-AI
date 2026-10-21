@@ -7,6 +7,8 @@ from sqlalchemy import URL
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     app_env: str = "development"
+    session_days: int = 7
+    allow_demo_signup: bool = False
     database_url: str = "sqlite:///./var/supportops.db"
     db_host: str = ""
     db_name: str = "supportops"
@@ -18,7 +20,6 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://api.openai.com/v1"
     llm_model: str = ""
     llm_api_key: str = ""
-    app_api_key: str = ""
     fault_injection_enabled: bool = False
     otel_service_name: str = "supportops-api"
     otel_exporter_otlp_endpoint: str = ""

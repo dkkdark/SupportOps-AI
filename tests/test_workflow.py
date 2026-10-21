@@ -73,8 +73,16 @@ def test_faults_and_recovery(client, fault, reason):
 
 def test_effective_policy_and_boundary(client):
     with client.app.state.sessions() as db:
-        old = [d for d in active_documents(db, date(2026, 9, 30)) if d.key == "returns"]
-        new = [d for d in active_documents(db, date(2026, 10, 1)) if d.key == "returns"]
+        old = [
+            d
+            for d in active_documents(db, date(2026, 9, 30), client.organization_id)
+            if d.key == "returns"
+        ]
+        new = [
+            d
+            for d in active_documents(db, date(2026, 10, 1), client.organization_id)
+            if d.key == "returns"
+        ]
         assert len(old) == 1 and old[0].version == "0.9"
         assert len(new) == 1 and new[0].version == "1.0"
     t = client.post("/api/tickets/SO-1283/analyze", json={}).json()
@@ -85,9 +93,10 @@ def test_effective_policy_and_boundary(client):
 
 def test_conflicting_rules_fail_closed(client):
     with client.app.state.sessions() as db:
-        d = db.get(Document, "returns-v1")
+        d = db.get(Document, (client.organization_id, "returns-v1"))
         db.add(
             Document(
+                organization_id=client.organization_id,
                 id="returns-conflict",
                 key=d.key,
                 title=d.title,
