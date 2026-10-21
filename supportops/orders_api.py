@@ -4,7 +4,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from supportops.schemas import Order
 
-app = FastAPI(title="Listva · synthetic orders API", version="0.1.0")
+app = FastAPI(title="Northstar Goods · synthetic orders API", version="0.2.0")
 DATA = Path(__file__).resolve().parents[1] / "data/orders.json"
 
 

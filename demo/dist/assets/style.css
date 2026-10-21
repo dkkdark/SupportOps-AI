@@ -2131,3 +2131,355 @@ h1 {
 .context-section .context-note {
   color: #77816e;
 }
+/* Business onboarding and workspace administration */
+.workspace {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border: 1px solid #ffffff16;
+  background: #ffffff09;
+}
+.workspace strong {
+  max-width: 130px;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.profile > div:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.profile strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.profile .icon-btn {
+  color: #b2bcb5;
+  flex-shrink: 0;
+}
+.public-shell {
+  min-height: 100vh;
+  background: #fafbf7;
+}
+.public-header {
+  max-width: 1360px;
+  margin: auto;
+  padding: 30px 56px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.public-header .brand {
+  color: var(--ink);
+  margin: 0;
+  padding: 0;
+}
+.public-header .brand-mark {
+  background: var(--ink);
+  color: var(--green);
+}
+.public-header .brand em {
+  color: #42642e;
+  background: #dceeca;
+}
+.welcome-grid {
+  max-width: 1250px;
+  margin: 35px auto 65px;
+  padding: 0 44px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.85fr);
+  gap: 100px;
+  align-items: start;
+}
+.eyebrow {
+  color: #63854a;
+  letter-spacing: 1.7px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.welcome-story {
+  padding: 22px 0;
+}
+.welcome-story h1 {
+  font-size: clamp(40px, 4.7vw, 66px);
+  line-height: 1.08;
+  letter-spacing: -3px;
+  font-weight: 600;
+  margin: 24px 0;
+}
+.welcome-story h1 em {
+  font-style: normal;
+  color: #668a4f;
+}
+.welcome-story > p {
+  font-size: 16px;
+  color: #717a71;
+  line-height: 1.75;
+  max-width: 460px;
+}
+.welcome-steps {
+  margin-top: 36px;
+  display: grid;
+  gap: 22px;
+}
+.welcome-steps > div {
+  display: flex;
+  gap: 17px;
+}
+.welcome-steps > div > span {
+  background: #eaf1e0;
+  border: 1px solid #dbe7cf;
+  color: #56773e;
+  width: 35px;
+  height: 35px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.welcome-steps h3 {
+  font-size: 14px;
+  margin: 0 0 5px;
+  font-weight: 600;
+}
+.welcome-steps p {
+  color: #7a8279;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+.welcome-proof {
+  margin-top: 38px;
+  border-top: 1px solid #e2e7dc;
+  padding-top: 23px;
+  color: #7a8279;
+  font-size: 11px;
+  line-height: 1.8;
+}
+.welcome-proof > svg {
+  float: left;
+  margin-right: 12px;
+  color: #6d8c54;
+  width: 23px;
+  height: 23px;
+}
+.signup-card {
+  background: white;
+  border: 1px solid #e5e9df;
+  border-radius: 20px;
+  padding: 32px 34px;
+  box-shadow: 0 18px 70px #273b1710;
+}
+.signup-card h2 {
+  font-size: 24px;
+  letter-spacing: -0.7px;
+  line-height: 1.25;
+  margin: 20px 0 10px;
+}
+.signup-card > p {
+  color: #879080;
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 0 0 24px;
+}
+.signup-card .field {
+  margin-bottom: 15px;
+}
+.signup-card input {
+  background: #fafbf8;
+}
+.auth-submit {
+  width: 100%;
+  justify-content: center;
+  min-height: 43px;
+}
+.auth-divider {
+  border-top: 1px solid var(--border);
+  margin: 24px 0 20px;
+  text-align: center;
+  height: 1px;
+}
+.auth-divider span {
+  position: relative;
+  top: -9px;
+  background: white;
+  padding: 0 12px;
+  color: #9a9f96;
+  font-size: 10px;
+}
+.signup-card .auth-footnote {
+  font-size: 10px;
+  color: #9aa292;
+  line-height: 1.7;
+  text-align: center;
+  margin: 13px 0 0;
+}
+.public-footer {
+  padding: 25px 56px;
+  border-top: 1px solid #e5e9df;
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #9ca391;
+}
+.form-error {
+  color: #b74537;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  margin: 10px 0;
+}
+.form-error:empty {
+  display: none;
+}
+.form-hint {
+  font-size: 11px;
+  color: #879080;
+  line-height: 1.7;
+}
+.onboarding {
+  border: 1px solid #dce7d1;
+  background: linear-gradient(120deg, #f2f8e9, #fcfdf9);
+  border-radius: 14px;
+  padding: 23px 26px;
+  margin-bottom: 25px;
+}
+.onboarding h2 {
+  margin: 10px 0 6px;
+  font-size: 21px;
+  letter-spacing: -0.6px;
+}
+.onboarding p {
+  margin: 0;
+  color: #89937e;
+  font-size: 12px;
+}
+.onboarding-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 22px;
+}
+.onboarding-steps a {
+  color: var(--ink);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 15px 13px;
+  border: 1px solid #e2e9db;
+  border-radius: 9px;
+  background: #ffffffc7;
+  text-decoration: none;
+  font-size: 12px;
+}
+.onboarding-steps a:hover {
+  border-color: #9bb881;
+}
+.onboarding-steps b {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: #eaf1df;
+  color: #60803e;
+  font-size: 12px;
+}
+.onboarding-steps span {
+  flex: 1;
+  font-weight: 600;
+}
+.onboarding-steps small {
+  display: block;
+  font-weight: 400;
+  font-size: 10px;
+  color: #909b84;
+  margin-top: 4px;
+}
+.onboarding-steps svg {
+  width: 15px;
+  height: 15px;
+}
+.template-preview {
+  white-space: pre-wrap;
+}
+#invite-link {
+  font-size: 11px;
+}
+@media (max-width: 1000px) {
+  .welcome-grid {
+    gap: 45px;
+    padding: 0 30px;
+  }
+  .public-header {
+    padding: 25px 30px;
+  }
+  .onboarding-steps {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 720px) {
+  .welcome-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    margin: 10px auto 40px;
+    padding: 0 22px;
+  }
+  .welcome-story {
+    padding: 10px 0;
+  }
+  .welcome-story h1 {
+    font-size: 43px;
+    letter-spacing: -2px;
+  }
+  .welcome-story h1 br:first-child {
+    display: none;
+  }
+  .welcome-steps {
+    gap: 15px;
+    margin-top: 25px;
+  }
+  .welcome-proof {
+    display: none;
+  }
+  .signup-card {
+    width: 100%;
+    padding: 26px 23px;
+  }
+  .public-header {
+    padding: 22px;
+  }
+  .public-header .brand {
+    gap: 6px;
+    font-size: 17px;
+  }
+  .public-header .btn {
+    font-size: 10px;
+    padding: 9px;
+  }
+  .public-footer {
+    padding: 22px;
+  }
+  .onboarding {
+    padding: 20px;
+  }
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.public-header .brand > span:not(.brand-mark) {
+  display: inline;
+}
+.public-header .brand em {
+  display: inline;
+}

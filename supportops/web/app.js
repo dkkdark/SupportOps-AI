@@ -1,5 +1,14 @@
 import { icon } from './icons.js';
-import { init, request, isDemo, config } from './adapter.js';
+import {
+  init,
+  request,
+  isDemo,
+  config,
+  account,
+  authenticate,
+  refreshAccount,
+  signOut,
+} from './adapter.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (value) =>
@@ -31,6 +40,10 @@ const reasonNames = {
   invalid_order_data: 'The orders API returned invalid data. Check the integration.',
   missing_order_id: 'No order number was provided. Ask the customer for it.',
   ownership_review: 'The customer name does not match the order. Verify order ownership.',
+  template_unavailable:
+    'The selected template is disabled. Ask an admin to enable it before retrying.',
+  order_integration_not_connected:
+    'This request needs live order or account data. Check it in your business system before replying.',
   missing_sources: 'Required current policies are missing. A verified draft cannot be prepared.',
   conflicting_documents:
     'Multiple policy versions are active. Resolve the conflict in the knowledge base.',
@@ -64,6 +77,10 @@ const state = {
   tab: 'draft',
   tickets: [],
   docs: [],
+  templates: [],
+  members: [],
+  invitations: [],
+  audit: [],
   metrics: {},
   evaluation: { status: 'not_run' },
   detail: null,
@@ -92,9 +109,11 @@ const pages = {
   overview: 'Overview',
   tickets: 'Tickets',
   knowledge: 'Knowledge base',
-  quality: 'AI Release Guard',
+  quality: 'Reply quality',
   monitoring: 'Monitoring',
   settings: 'Settings',
+  templates: 'Reply templates',
+  team: 'Team',
 };
 
 function toast(text, error = false) {
@@ -105,30 +124,56 @@ function toast(text, error = false) {
   setTimeout(() => el.remove(), 5000);
 }
 function fail(e) {
+  if (e.status === 401 && !isDemo) {
+    refreshAccount().then(() => {
+      resetWorkspace();
+      closeModal();
+      location.hash = 'login';
+      render();
+    });
+  }
+
   const names = {
     revision_conflict: 'This ticket has changed. Refresh to see the latest version.',
-    invalid_api_key: 'An API key is required. Enter it in Settings.',
+    'Workspace changed. Refresh before continuing.':
+      'This tab belongs to a different workspace. Reload the page before continuing.',
     analysis_in_progress: 'Analysis is already running. Please wait for the result.',
     fault_injection_disabled: 'Fault scenarios are disabled in the server configuration.',
   };
   toast(names[e.message] || e.message || 'The request could not be completed', true);
 }
 async function reload() {
-  const [tickets, docs, metrics, evaluation] = await Promise.all([
-    request('/tickets'),
-    request('/knowledge'),
-    request('/metrics'),
-    request('/evaluation'),
-  ]);
-  Object.assign(state, { tickets, docs, metrics, evaluation });
+  const [tickets, docs, metrics, evaluation, templates, members, invitations, audit] =
+    await Promise.all([
+      request('/tickets'),
+      request('/knowledge'),
+      request('/metrics'),
+      request('/evaluation'),
+      isDemo ? [] : request('/templates'),
+      canManage() ? request('/members') : [],
+      canManage() ? request('/invitations') : [],
+      canManage() ? request('/audit') : [],
+    ]);
+  Object.assign(state, {
+    tickets,
+    docs,
+    metrics,
+    evaluation,
+    templates,
+    members: members.map((m) => ({ ...m, id: m.user_id })),
+    invitations,
+    audit,
+  });
   if (!tickets.some((t) => t.id === state.selected)) state.selected = tickets[0]?.id;
   state.detail = state.selected ? await request('/tickets/' + state.selected) : null;
 }
 function sidebar() {
-  return `<aside class="sidebar"><a class="brand" href="#tickets" aria-label="SupportOps AI · home"><span class="brand-mark">${icon('logo')}</span><span>SupportOps</span><em>AI</em></a><div class="workspace"><span class="store-mark">${icon('leaf')}</span><div><strong>Listva</strong><small>Workspace</small></div>${icon('down')}</div><p class="nav-label">WORKSPACE</p><nav>${[
+  return `<aside class="sidebar"><a class="brand" href="#tickets" aria-label="SupportOps AI · home"><span class="brand-mark">${icon('logo')}</span><span>SupportOps</span><em>AI</em></a><button class="workspace" data-action="switch-workspace"><span class="store-mark">${icon('leaf')}</span><div><strong>${esc(businessName())}</strong><small>${retailDemo() ? 'Sample workspace' : esc(account?.organization?.role || 'Choose workspace')}</small></div>${icon('down')}</button><p class="nav-label">WORKSPACE</p><nav>${[
     ['overview', 'grid'],
     ['tickets', 'inbox'],
     ['knowledge', 'book'],
+    ['templates', 'file'],
+    ...(canManage() ? [['team', 'human']] : []),
   ]
     .map(([p, i]) => nav(p, i))
     .join('')}<div class="nav-separator"></div><p class="nav-label">QUALITY & OPERATIONS</p>${[
@@ -138,15 +183,19 @@ function sidebar() {
     .map(([p, i]) => nav(p, i))
     .join(
       '',
-    )}</nav><div class="sidebar-bottom">${nav('settings', 'settings')}<div class="system-note"><b>${icon('shield')}Human in the loop</b>Every reply gets a human review before it reaches a customer.<a href="#quality">How review works ${icon('arrow')}</a></div><div class="profile"><div class="avatar">AM</div><div><strong>Alex Morgan</strong><small>Support agent</small></div>${icon('down')}</div></div></aside>`;
+    )}</nav><div class="sidebar-bottom">${nav('settings', 'settings')}<div class="system-note"><b>${icon('shield')}Human in the loop</b>Every reply gets a human review before it reaches a customer.<a href="#quality">How review works ${icon('arrow')}</a></div><div class="profile"><div class="avatar">${esc(initials(account.user.name))}</div><div><strong>${esc(account.user.name)}</strong><small>${esc(account.organization?.role || 'Account')}</small></div>${!isDemo ? `<button class="icon-btn" data-action="logout" aria-label="Sign out" title="Sign out">${icon('external')}</button>` : ''}</div></div></aside>`;
 }
 function nav(p, i) {
   return `<a href="#${p}" class="nav-item ${state.page === p ? 'active' : ''}" aria-label="${pages[p]}" ${state.page === p ? 'aria-current="page"' : ''}>${icon(i)}<span>${pages[p]}</span>${p === 'tickets' ? `<b class="nav-count">${state.tickets.filter((t) => !['approved', 'escalated'].includes(t.status)).length}</b>` : ''}</a>`;
 }
 function render() {
+  if (!account) {
+    $('#app').innerHTML = publicPage();
+    return;
+  }
   document.title = `SupportOps AI · ${pages[state.page]}`;
   $('#app').innerHTML =
-    `<div class="app-shell">${sidebar()}<main class="main"><header class="topbar"><div class="breadcrumbs"><span>Workspace</span>${icon('chevron')}<b>${pages[state.page]}</b></div><div class="top-actions"><span class="system-status"><i class="status-dot"></i>${isDemo ? 'Browser demo' : 'API connected'}</span><i class="top-divider"></i><button class="icon-btn" data-action="activity" aria-label="Recent activity">${icon('bell')}</button><div class="avatar" aria-label="Alex Morgan’s profile">AM</div></div></header>${isDemo ? `<div class="demo-banner"><span>${icon('info')}Interactive demo · synthetic data · changes are saved in this browser</span><button data-action="demo-info">About the demo ${icon('arrow')}</button></div>` : ''}<div class="content">${pageContent()}</div></main></div>`;
+    `<div class="app-shell">${sidebar()}<main class="main"><header class="topbar"><div class="breadcrumbs"><span>Workspace</span>${icon('chevron')}<b>${pages[state.page]}</b></div><div class="top-actions"><span class="system-status"><i class="status-dot"></i>${isDemo ? 'Browser demo' : 'API connected'}</span><i class="top-divider"></i><button class="icon-btn" data-action="activity" aria-label="Recent activity">${icon('bell')}</button><div class="avatar" aria-label="${esc(account.user.name)}">${esc(initials(account.user.name))}</div></div></header>${isDemo ? `<div class="demo-banner"><span>${icon('info')}Interactive demo · synthetic data · changes are saved in this browser</span><button data-action="demo-info">About the demo ${icon('arrow')}</button></div>` : ''}<div class="content">${pageContent()}</div></main></div>`;
 }
 function heading(title, sub, actions = '') {
   return `<div class="page-heading"><div><h1>${title}</h1><p>${sub}</p></div><div class="heading-actions">${actions}</div></div>`;
@@ -171,11 +220,15 @@ function pageContent() {
     case 'overview':
       return overviewPage();
     case 'settings':
-      return settingsPage();
+      return isDemo ? settingsPage() : workspaceSettings();
+    case 'templates':
+      return templatesPage();
+    case 'team':
+      return teamPage();
   }
 }
 function ticketsPage() {
-  return `${heading('Tickets', 'A little less busywork. A lot more thoughtful support.', `<span class="date-label">${icon('clock')}${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span><button class="btn btn-primary" data-action="new">${icon('plus')}New ticket</button>`)}${metricsRow()}<div class="queue-toolbar"><div class="filter-tabs" role="group" aria-label="Filter tickets">${[
+  return `${onboarding()}${heading('Tickets', 'A little less busywork. A lot more thoughtful support.', `<span class="date-label">${icon('clock')}${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span><button class="btn btn-primary" data-action="new">${icon('plus')}New ticket</button>`)}${metricsRow()}<div class="queue-toolbar"><div class="filter-tabs" role="group" aria-label="Filter tickets">${[
     ['all', 'All tickets'],
     ['review', 'In review'],
     ['manual', 'Needs an agent'],
@@ -187,7 +240,7 @@ function ticketsPage() {
     )
     .join(
       '',
-    )}</div><div class="toolbar-right"><label class="search-wrap">${icon('search')}<input id="ticket-search" aria-label="Search tickets" placeholder="Search tickets…" value="${esc(state.query)}"><kbd>⌘ K</kbd></label><button class="btn" data-action="sort" title="Change sort order">${icon('filter')}<span>${state.sort === 'newest' ? 'Newest' : 'Priority'}</span></button></div></div><section class="workbench" aria-label="Ticket workspace"><div class="ticket-list"><div class="list-heading"><b>Ticket queue</b>${icon('down')}</div><div id="ticket-items">${ticketItems()}</div></div><div class="ticket-detail" id="ticket-detail">${detailContent()}</div></section><div class="bottom-line"><span><i class="status-dot"></i>${isDemo ? 'Listva store demo' : 'Listva synthetic store'} · synthetic data, no personal information</span><span><kbd>N</kbd> New ticket <kbd>⌘ K</kbd> Search</span></div>`;
+    )}</div><div class="toolbar-right"><label class="search-wrap">${icon('search')}<input id="ticket-search" aria-label="Search tickets" placeholder="Search tickets…" value="${esc(state.query)}"><kbd>⌘ K</kbd></label><button class="btn" data-action="sort" title="Change sort order">${icon('filter')}<span>${state.sort === 'newest' ? 'Newest' : 'Priority'}</span></button></div></div><section class="workbench" aria-label="Ticket workspace"><div class="ticket-list"><div class="list-heading"><b>Ticket queue</b>${icon('down')}</div><div id="ticket-items">${ticketItems()}</div></div><div class="ticket-detail" id="ticket-detail">${detailContent()}</div></section><div class="bottom-line"><span><i class="status-dot"></i>${esc(businessName())} · ${retailDemo() ? 'Synthetic sample data' : 'Your workspace'}</span><span><kbd>N</kbd> New ticket <kbd>⌘ K</kbd> Search</span></div>`;
 }
 function filteredByStatus(id) {
   return state.tickets.filter(
@@ -269,7 +322,7 @@ function sourcesContent(r) {
   return `<div class="draft-body">${r.order ? `<div class="source-card" data-action="order-info"><h4>${icon('box')} Store API · order #${esc(r.order.id)}</h4><p>Order status, carrier, tracking number and items were retrieved from ${isDemo ? 'the synthetic dataset' : 'Orders API'}.</p><div class="source-meta"><span>Authoritative source for order status</span></div></div>` : ''}${(r.sources || []).map((d) => `<button class="source-card" data-doc="${esc(d.id)}" style="display:block;width:100%;text-align:left"><h4>${icon('file')} ${esc(d.title)}</h4><p>${esc(d.text)}</p><div class="source-meta"><span>v${esc(d.version)}</span><span>From ${fmtDate(d.effective_from)}</span><span>${icon('external')} Open</span></div></button>`).join('') || '<div class="empty">No sources found yet</div>'}</div>`;
 }
 function workflowContent(r) {
-  return `<div class="draft-body">${(r.steps || []).map((s, i) => `<div class="workflow-node">${icon(s.status === 'error' ? 'warning' : 'checkcircle')}<span>${stepNames[s.name] || esc(s.name)}</span><small>${ms(s.duration_ms)}</small></div>`).join('')}<div class="workflow-node">${icon('human')}<span>Human review</span><small>${['approved', 'escalated'].includes(state.detail.status) ? 'Completed' : 'Pending'}</small></div><p class="context-note">${isDemo ? 'Workflow steps are simulated in the browser. These are not server traces.' : 'Workflow state is saved in the persistent LangGraph checkpointer.'}</p><pre class="code-block">${esc(JSON.stringify(r.manifest || {}, null, 2))}</pre><button class="btn" data-action="export-trace">${icon('download')}Download result JSON</button></div>`;
+  return `<div class="draft-body">${(r.steps || []).map((s, i) => `<div class="workflow-node">${icon(s.status === 'error' ? 'warning' : 'checkcircle')}<span>${s.name === 'orders_api' && !retailDemo() ? 'Check workspace context' : stepNames[s.name] || esc(s.name)}</span><small>${ms(s.duration_ms)}</small></div>`).join('')}<div class="workflow-node">${icon('human')}<span>Human review</span><small>${['approved', 'escalated'].includes(state.detail.status) ? 'Completed' : 'Pending'}</small></div><p class="context-note">${isDemo ? 'Workflow steps are simulated in the browser. These are not server traces.' : 'Workflow state is saved in the persistent LangGraph checkpointer.'}</p><pre class="code-block">${esc(JSON.stringify(r.manifest || {}, null, 2))}</pre><button class="btn" data-action="export-trace">${icon('download')}Download result JSON</button></div>`;
 }
 function historyContent(t) {
   return `<div class="draft-body"><div class="history-event">Ticket created<small>${fmtDate(t.created_at, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}</small></div>${t.result ? `<div class="history-event">${t.result.reason ? 'Sent for manual review' : 'Draft prepared'}<small>Revision ${t.revision} · ${esc(t.result.manifest?.model || 'workflow')}</small></div>` : ''}${(t.reviews || []).map((r) => `<div class="history-event">${r.decision === 'approve' ? 'Reply approved' : 'Ticket escalated'}<small>${fmtDate(r.created_at, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })} · ${esc(r.actor || 'Agent')}</small>${r.note ? `<p>${esc(r.note)}</p>` : ''}</div>`).join('')}</div>`;
@@ -280,9 +333,12 @@ function reviewActions(t) {
   if (t.status === 'escalated')
     return `<div class="completed-box">${icon('human')}Ticket escalated. The decision is saved in its history.</div>`;
   if (!t.result || state.busy) return '';
-  return `<div class="review-actions">${t.status === 'review' ? `<button class="btn btn-primary" data-action="approve">${icon('check')}Approve reply</button>` : ''}<button class="btn" data-action="escalate">${icon('human')}Escalate to an agent</button>${config.faults_enabled ? `<button class="icon-btn" data-action="faults" title="Test a failure scenario" aria-label="Test a failure scenario">${icon('code')}</button>` : ''}</div>`;
+  return `<div class="review-actions">${t.status === 'review' ? `<button class="btn btn-primary" data-action="approve">${icon('check')}Approve reply</button>` : ''}<button class="btn" data-action="escalate">${icon('human')}Escalate to an agent</button>${config.faults_enabled && retailDemo() ? `<button class="icon-btn" data-action="faults" title="Test a failure scenario" aria-label="Test a failure scenario">${icon('code')}</button>` : ''}</div>`;
 }
 function contextPanel(t, r) {
+  if (!retailDemo())
+    return `<aside class="context-panel"><div class="context-section"><h3 class="context-heading">${icon('human')}Customer</h3><div class="context-customer"><div class="avatar">${esc(initials(t.customer))}</div><div><strong>${esc(t.customer)}</strong><small>${esc(t.email || 'No contact provided')}</small></div></div><div class="kv"><span>Channel</span><strong>${esc(t.channel)}</strong></div></div><div class="context-section"><h3 class="context-heading">${icon('book')}Business knowledge</h3><strong>${esc(businessName())}</strong><p class="context-note">${r?.sources?.length || 0} relevant policy excerpts${r?.template ? ' · template revision ' + r.template.revision : ''}</p><p class="context-note">Replies use this workspace’s current policies and templates. Check the sources before approving.</p></div><div class="context-section"><h3 class="context-heading">${icon('shield')}Original draft checks</h3>${r?.checks?.length ? `<div class="check-list">${r.checks.map((c) => `<div class="check-item ${c.passed ? '' : 'failed'}">${icon(c.passed ? 'checkcircle' : 'warning')}<span>${esc(c.label)}</span></div>`).join('')}</div>` : '<p class="context-note">Checks run when you prepare a reply.</p>'}${r?.trace_id ? `<button class="trace-link" data-action="export-trace">${icon('activity')}View analysis record ${icon('external')}</button>` : ''}</div></aside>`;
+
   const o = r?.order;
   const statuses = {
     delayed: 'Delivery delayed',
@@ -291,7 +347,7 @@ function contextPanel(t, r) {
     delivered: 'Delivered',
     cancelled: 'Cancelled',
   };
-  return `<aside class="context-panel"><div class="context-section"><h3 class="context-heading">${icon('box')}Order details</h3>${o ? `<div class="order-title">#${esc(o.id)}<button class="icon-btn" data-action="order-info" aria-label="View order data">${icon('external')}</button></div><span class="badge ${o.status === 'delayed' ? 'badge-manual' : 'badge-review'}">${icon('truck')}${statuses[o.status]}</span>${o.items.map((item) => `<div class="order-product"><div class="product-icon">${icon('box')}</div><div><b>${esc(item.title)}</b><small>${item.quantity} item(s) · Listva store</small></div></div>`).join('')}<div class="kv"><span>Order total</span><strong>${o.total.toLocaleString('en-GB')} ₽</strong></div><div class="kv"><span>Order placed</span><strong>${fmtDate(o.placed_at)}</strong></div><div class="kv"><span>Expected delivery</span><strong>${fmtDate(o.expected_at)}</strong></div><div class="kv"><span>Carrier</span><strong>${esc(o.carrier)}</strong></div>${o.tracking ? `<div class="kv"><span>Tracking number</span><strong>${esc(o.tracking)}</strong></div>` : ''}<p class="context-note">${icon('link')} ${isDemo ? 'Synthetic store data' : 'Retrieved from the store API'}</p>` : `<div class="context-note">${t.order_id ? `Order #${esc(t.order_id)}` : 'No order number provided'}<br>Order details will appear after analysis.</div>`}</div><div class="context-section"><h3 class="context-heading">${icon('human')}Customer</h3><div class="context-customer"><div class="avatar">${esc(initials(t.customer))}</div><div><strong>${esc(t.customer)}</strong><small>${esc(t.email || 'No contact provided')}</small></div></div><div class="kv"><span>Channel</span><strong>${{ email: 'Email', chat: 'Chat', web: 'Web form' }[t.channel]}</strong></div><div class="kv"><span>Store</span><strong>Listva · demo</strong></div></div><div class="context-section"><h3 class="context-heading">${icon('shield')}Original draft checks</h3>${r?.checks?.length ? `<div class="check-list">${r.checks.map((c) => `<div class="check-item ${c.passed ? '' : 'failed'}">${icon(c.passed ? 'checkcircle' : 'warning')}<span>${esc(c.label)}</span></div>`).join('')}</div>` : '<p class="context-note">Checks run when you prepare a reply.</p>'}${r?.trace_id ? `<button class="trace-link" data-action="export-trace">${icon('activity')}<code>trace: ${esc(r.trace_id.slice(0, 16))}…</code>${icon('external')}</button>` : ''}</div></aside>`;
+  return `<aside class="context-panel"><div class="context-section"><h3 class="context-heading">${icon('box')}Order details</h3>${o ? `<div class="order-title">#${esc(o.id)}<button class="icon-btn" data-action="order-info" aria-label="View order data">${icon('external')}</button></div><span class="badge ${o.status === 'delayed' ? 'badge-manual' : 'badge-review'}">${icon('truck')}${statuses[o.status]}</span>${o.items.map((item) => `<div class="order-product"><div class="product-icon">${icon('box')}</div><div><b>${esc(item.title)}</b><small>${item.quantity} item(s) · ${esc(businessName())}</small></div></div>`).join('')}<div class="kv"><span>Order total</span><strong>${o.total.toLocaleString('en-GB')} ₽</strong></div><div class="kv"><span>Order placed</span><strong>${fmtDate(o.placed_at)}</strong></div><div class="kv"><span>Expected delivery</span><strong>${fmtDate(o.expected_at)}</strong></div><div class="kv"><span>Carrier</span><strong>${esc(o.carrier)}</strong></div>${o.tracking ? `<div class="kv"><span>Tracking number</span><strong>${esc(o.tracking)}</strong></div>` : ''}<p class="context-note">${icon('link')} ${isDemo ? 'Synthetic store data' : 'Retrieved from the store API'}</p>` : `<div class="context-note">${t.order_id ? `Order #${esc(t.order_id)}` : 'No order number provided'}<br>${retailDemo() ? 'Order details will appear after analysis.' : 'No live order integration is connected. Your policies are used as the source of truth.'}</div>`}</div><div class="context-section"><h3 class="context-heading">${icon('human')}Customer</h3><div class="context-customer"><div class="avatar">${esc(initials(t.customer))}</div><div><strong>${esc(t.customer)}</strong><small>${esc(t.email || 'No contact provided')}</small></div></div><div class="kv"><span>Channel</span><strong>${{ email: 'Email', chat: 'Chat', web: 'Web form' }[t.channel]}</strong></div><div class="kv"><span>Business</span><strong>${esc(businessName())}</strong></div></div><div class="context-section"><h3 class="context-heading">${icon('shield')}Original draft checks</h3>${r?.checks?.length ? `<div class="check-list">${r.checks.map((c) => `<div class="check-item ${c.passed ? '' : 'failed'}">${icon(c.passed ? 'checkcircle' : 'warning')}<span>${esc(c.label)}</span></div>`).join('')}</div>` : '<p class="context-note">Checks run when you prepare a reply.</p>'}${r?.trace_id ? `<button class="trace-link" data-action="export-trace">${icon('activity')}<code>trace: ${esc(r.trace_id.slice(0, 16))}…</code>${icon('external')}</button>` : ''}</div></aside>`;
 }
 
 function overviewPage() {
@@ -332,61 +388,311 @@ function overviewPage() {
 }
 function knowledgePage() {
   const day = new Date().toISOString().slice(0, 10);
-  const active = (d) => d.effective_from <= day && (!d.effective_to || d.effective_to > day);
+  const active = (d) =>
+    d.effective_from <= day && (!d.effective_to || d.effective_to > day) && !d.archived;
   const docs = state.docs.filter(
     (d) =>
       (state.showArchived || active(d)) &&
       [d.title, d.text].some((v) => v.toLowerCase().includes(state.docQuery.toLowerCase())),
   );
-  return `${heading('Knowledge base', 'Store policies with clear sources, versions and effective dates.', `<button class="btn" data-action="export-knowledge">${icon('download')}Export JSON</button>`)}<div class="info-strip">${icon('shield')}Only current policies are used in replies. The archived 14-day return policy is excluded from retrieval.</div><div class="queue-toolbar"><div class="filter-tabs"><button class="filter-tab ${!state.showArchived ? 'active' : ''}" data-archive="false">Current policies <span>${state.docs.filter(active).length}</span></button><button class="filter-tab ${state.showArchived ? 'active' : ''}" data-archive="true">All versions <span>${state.docs.length}</span></button></div><label class="search-wrap">${icon('search')}<input id="doc-search" value="${esc(state.docQuery)}" placeholder="Search policies…" aria-label="Search the knowledge base"></label></div><div id="document-cards" class="document-grid">${docs.map((d) => `<button class="document-card" data-doc="${esc(d.id)}"><span class="document-icon">${icon('file')}</span><h3>${esc(d.title)}</h3><p>${esc(d.text)}</p><div class="source-meta"><span>v${esc(d.version)}</span><span>From ${fmtDate(d.effective_from)}</span><span class="badge ${active(d) ? 'badge-review' : ''}">${active(d) ? 'Active' : 'Archived'}</span></div></button>`).join('') || '<div class="empty">No policies found</div>'}</div>`;
+  return `${heading('Knowledge base', 'Your business knowledge, with clear sources, versions and effective dates.', `<button class="btn" data-action="export-knowledge">${icon('download')}Export JSON</button>${canManage() ? `<button class="btn" data-action="upload-policy">${icon('download')}Upload file</button><button class="btn btn-primary" data-action="add-policy">${icon('plus')}Add policy</button>` : ''}`)}<div class="info-strip">${icon('shield')}Only current, unarchived policies from this workspace are used in replies. Earlier versions remain available for reference.</div><div class="queue-toolbar"><div class="filter-tabs"><button class="filter-tab ${!state.showArchived ? 'active' : ''}" data-archive="false">Current policies <span>${state.docs.filter(active).length}</span></button><button class="filter-tab ${state.showArchived ? 'active' : ''}" data-archive="true">All versions <span>${state.docs.length}</span></button></div><label class="search-wrap">${icon('search')}<input id="doc-search" value="${esc(state.docQuery)}" placeholder="Search policies…" aria-label="Search the knowledge base"></label></div><div id="document-cards" class="document-grid">${docs.map((d) => `<button class="document-card" data-doc="${esc(d.id)}"><span class="document-icon">${icon('file')}</span><h3>${esc(d.title)}</h3><p>${esc(d.text)}</p><div class="source-meta"><span>v${esc(d.version)}</span><span>From ${fmtDate(d.effective_from)}</span><span class="badge ${active(d) ? 'badge-review' : ''}">${active(d) ? 'Active' : 'Archived'}</span></div></button>`).join('') || '<div class="empty">No policies found</div>'}</div>`;
 }
 function qualityPage() {
+  if (!retailDemo())
+    return `${heading('Reply quality', 'Evidence and human judgment, on every customer reply.')}<div class="section-grid"><section class="panel"><h2>Your review process</h2><div class="check-list">${['Only this workspace’s current policies are retrieved', 'Verified excerpts are inserted into your reply template', 'Missing evidence routes a request to an agent', 'An employee reviews and edits every reply', 'Approved replies retain their sources and template version'].map((c) => `<div class="check-item">${icon('checkcircle')}<span>${c}</span></div>`).join('')}</div></section><section class="panel"><h2>Business evaluation</h2><p>No business-specific evaluation dataset is configured yet.</p><div class="notice-card">${icon('info')}Build a set of representative customer questions with expected answers before assessing accuracy for your business. The sample retail benchmark does not measure your policies.</div></section></div>`;
   const e = state.evaluation;
   const ready = e.status === 'passed' || e.status === 'failed';
   return `${heading('AI Release Guard', 'Evaluate changes before they ship. Release with evidence.', `<button class="btn" data-action="export-eval">${icon('download')}Download report</button>`)}<div class="info-strip">${icon('info')}${isDemo ? 'A snapshot of local evaluation results. The demo does not call a live model.' : 'Evaluation runs separately and gates the CI build.'}</div>${ready ? `<div class="metrics-row">${metric('Factual accuracy', `${Math.round(e.metrics.factual_accuracy * 100)}%`, 'Checks for order status, facts and sources', 'checkcircle', true)}${metric('Classification · macro-F1', e.metrics.macro_f1.toFixed(2), 'Against hand-labeled synthetic cases', 'inbox')}${metric('Escalation recall', `${Math.round(e.metrics.escalation_recall * 100)}%`, 'Requests that must reach a human', 'human')}${metric('Latency · p95', ms(e.metrics.p95_ms), `${e.cases} cases · sequential execution`, 'clock')}</div><div class="section-grid"><section class="panel"><h2>Release evaluation</h2><p>Dataset ${esc(e.dataset_version)} · ${esc(e.split)}</p><div class="quality-score"><div class="score-ring"><b>${e.passed}/${e.cases}</b><small>cases passed</small></div><div><h3>${e.status === 'passed' ? 'All checks passed' : 'Release blocked'}</h3><p>Model: ${esc(e.model)}<br>${fmtDate(e.created_at, { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}<br>${e.live ? 'Live run with an external model' : 'Deterministic baseline · no LLM spend'}</p></div></div><button class="btn" data-action="eval-info">${icon('terminal')}Run the evaluation</button></section><section class="panel"><h2>What the guard checks</h2><p>A failed critical check blocks the pipeline</p><div class="check-list">${['Current return policies are applied', 'Shipped orders are never automatically cancelled', 'API outages route tickets to an agent', 'The model cannot add unsupported facts', 'Repeated approvals do not create duplicates'].map((c) => `<div class="check-item">${icon('checkcircle')}<span>${c}</span></div>`).join('')}</div><div class="notice-card">${icon('info')}These metrics cover the synthetic dataset. Agent productivity and live-model quality require a separate study.</div></section></div><section class="panel"><h2>Scenario results</h2><p>Isolated ${esc(e.split)} dataset · seed ${e.seed}</p><div class="table-scroll"><table class="data-table"><thead><tr><th>Scenario</th><th>Expected category</th><th>Result</th><th>Time</th></tr></thead><tbody>${(e.results || []).map((r) => `<tr><td>${esc(r.id)}<br><code>${esc(r.description)}</code></td><td>${(r.expected_categories || []).map((c) => categoryNames[c]).join(', ')}</td><td><span class="badge ${r.passed ? 'badge-review' : 'badge-manual'}">${icon(r.passed ? 'check' : 'warning')}${r.passed ? 'Passed' : 'Failed'}</span></td><td>${ms(r.duration_ms)}</td></tr>`).join('')}</tbody></table></div></section>` : `<section class="panel"><div class="empty">${icon('shield')}<strong>No evaluation run yet</strong>Run evaluation to generate a report.<pre class="code-block">python -m eval.run --split holdout</pre><button class="btn" data-action="refresh">${icon('refresh')}Refresh</button></div></section>`}`;
 }
 function monitoringPage() {
   const m = state.metrics;
-  return `${heading('Monitoring', 'Follow every ticket through the workflow and understand what went wrong.', `<button class="btn" data-action="refresh">${icon('refresh')}Refresh</button>`)}${isDemo ? `<div class="info-strip">${icon('info')}The demo shows workflow structure. Real timings and traces are available in the local application.</div>` : ''}<div class="metrics-row">${metric('Analyzed tickets', m.analyzed ?? 0, 'Including manual review', 'activity')}${metric('Latency · p95', ms(m.p95_ms), 'Sequential runs in this environment', 'clock')}${metric('LLM tokens', (m.tokens ?? 0).toLocaleString('en-GB'), config.provider === 'baseline' ? 'The baseline does not call an LLM' : 'Input and output tokens', 'spark')}${metric('LLM spend', `$${(m.cost_usd || 0).toFixed(4)}`, 'Infrastructure costs are separate', 'grid')}</div><section class="panel"><h2>Recent workflow runs</h2><p>One trace ID connects every step of a run</p><div class="table-scroll"><table class="data-table"><thead><tr><th>Ticket / trace</th><th>Status</th><th>Reason / model</th><th>Latency</th><th></th></tr></thead><tbody>${(m.runs || []).map((r) => `<tr><td><strong>${esc(r.ticket_id)}</strong><br><code>${esc(r.trace_id?.slice(0, 18) || '—')}</code></td><td>${badge(r.status)}</td><td style="max-width:330px">${esc(r.reason ? reasonNames[r.reason] || r.reason : r.manifest?.model || '—')}</td><td>${ms(r.duration_ms)}</td><td><button class="btn" data-open-ticket="${esc(r.ticket_id)}" data-workflow="true">Trace ${icon('arrow')}</button></td></tr>`).join('') || '<tr><td colspan="5">Analyze a ticket to see its workflow here.</td></tr>'}</tbody></table></div></section><div class="section-grid"><section class="panel"><h2>Test failure handling</h2><p>Controlled scenarios on a new synthetic ticket</p>${[
+  return `${heading('Monitoring', 'Follow every ticket through the workflow and understand what went wrong.', `<button class="btn" data-action="refresh">${icon('refresh')}Refresh</button>`)}${isDemo ? `<div class="info-strip">${icon('info')}The demo shows workflow structure. Real timings and traces are available in the local application.</div>` : ''}<div class="metrics-row">${metric('Analyzed tickets', m.analyzed ?? 0, 'Including manual review', 'activity')}${metric('Latency · p95', ms(m.p95_ms), 'Sequential runs in this environment', 'clock')}${metric('LLM tokens', (m.tokens ?? 0).toLocaleString('en-GB'), config.provider === 'baseline' ? 'The baseline does not call an LLM' : 'Input and output tokens', 'spark')}${metric('LLM spend', `$${(m.cost_usd || 0).toFixed(4)}`, 'Infrastructure costs are separate', 'grid')}</div><section class="panel"><h2>Recent workflow runs</h2><p>One trace ID connects every step of a run</p><div class="table-scroll"><table class="data-table"><thead><tr><th>Ticket / trace</th><th>Status</th><th>Reason / model</th><th>Latency</th><th></th></tr></thead><tbody>${(m.runs || []).map((r) => `<tr><td><strong>${esc(r.ticket_id)}</strong><br><code>${esc(r.trace_id?.slice(0, 18) || '—')}</code></td><td>${badge(r.status)}</td><td style="max-width:330px">${esc(r.reason ? reasonNames[r.reason] || r.reason : r.manifest?.model || '—')}</td><td>${ms(r.duration_ms)}</td><td><button class="btn" data-open-ticket="${esc(r.ticket_id)}" data-workflow="true">Trace ${icon('arrow')}</button></td></tr>`).join('') || '<tr><td colspan="5">Analyze a ticket to see its workflow here.</td></tr>'}</tbody></table></div></section><div class="section-grid" ${!retailDemo() ? 'hidden' : ''}><section class="panel"><h2>Test failure handling</h2><p>Controlled scenarios on a new synthetic ticket</p>${[
     ['orders_timeout', 'Orders API timeout', 'Bounded timeout → manual review'],
     ['invalid_model', 'Invalid model output', 'Two attempts → safe handoff'],
     ['missing_sources', 'Missing required policies', 'No sources → no draft'],
   ]
     .map(
       ([id, title, sub]) =>
-        `<div class="setting-row"><div><h3>${title}</h3><p>${sub}</p></div><button class="btn" data-fault="${id}" ${!config.faults_enabled ? 'disabled' : ''}>${icon('play')}Run</button></div>`,
+        `<div class="setting-row"><div><h3>${title}</h3><p>${sub}</p></div><button class="btn" data-fault="${id}" ${!config.faults_enabled || !retailDemo() ? 'disabled' : ''}>${icon('play')}Run</button></div>`,
     )
     .join(
       '',
     )}</section><section class="panel"><h2>Diagnose and recover</h2><p>Local and cloud environments</p><div class="modal-prose">OpenTelemetry connects the API, retrieval, generation and validation. Configure export through OTLP.<br><br>Restore the failed dependency and retry analysis. Approved tickets are protected against repeat processing.</div><button class="btn" data-action="runbook" style="margin-top:18px">${icon('book')}Open the runbook</button></section></div>`;
 }
 function settingsPage() {
-  return `${heading('Settings', 'Environment, model and access configuration.')}<section class="panel"><h2>Workspace</h2><p>Synthetic online store</p>${[
-    ['Store name', 'A publishable synthetic dataset', 'Listva'],
-    [
-      'Application mode',
-      isDemo
-        ? 'State is saved in this browser’s localStorage'
-        : 'Tickets, reviews and checkpoints are saved on the server',
-      isDemo ? 'Browser demo' : 'FastAPI',
-    ],
-    ['Model provider', 'Configured on the server using MODEL_PROVIDER', config.provider],
-    [
-      'Application version',
-      'Code, prompt and document versions are saved with every result',
-      config.version,
-    ],
+  return `${heading('Sample settings', 'An offline walkthrough with synthetic data.')}<section class="panel"><h2>Northstar Goods</h2><p>This standalone sample saves changes in this browser. To register a business, upload policies or invite a team, run the full SupportOps API.</p><button class="btn" data-action="reset-demo">Reset sample data</button></section>`;
+}
+
+const canManage = () => !isDemo && ['owner', 'admin'].includes(account?.organization?.role);
+const businessName = () => account?.organization?.name || 'Your business';
+const retailDemo = () => isDemo || account?.organization?.is_demo;
+function resetWorkspace() {
+  Object.assign(state, {
+    tickets: [],
+    docs: [],
+    templates: [],
+    members: [],
+    invitations: [],
+    audit: [],
+    metrics: {},
+    evaluation: {},
+    detail: null,
+    selected: null,
+    drafts: {},
+    filter: 'all',
+    query: '',
+    page: 'tickets',
+    docQuery: '',
+    showArchived: false,
+  });
+}
+function publicPage() {
+  const join = location.hash.startsWith('#join/');
+  const mode = join ? 'join' : location.hash === '#login' ? 'login' : 'register';
+  document.title = 'SupportOps AI · Support that knows your business';
+  return `<div class="public-shell"><header class="public-header"><a class="brand" href="#register"><span class="brand-mark">${icon('logo')}</span><span>SupportOps</span><em>AI</em></a><a class="btn" href="${mode === 'login' ? '#register' : '#login'}">${mode === 'login' ? 'Create a workspace' : 'Sign in'} ${icon('arrow')}</a></header><main class="welcome-grid"><section class="welcome-story"><span class="eyebrow">YOUR BUSINESS. YOUR KNOWLEDGE.</span><h1>Great support starts <br>with knowing<br><em>your business.</em></h1><p>One workspace for your policies, your people and thoughtful customer replies. Built around the way your team works.</p><div class="welcome-steps">${[
+    ['01', 'Bring your knowledge', 'Upload your rules, procedures and service policies.'],
+    ['02', 'Make it sound like you', 'Create reply templates that match your brand.'],
+    ['03', 'Work better, together', 'Invite your team. Review every reply before sharing.'],
   ]
-    .map(
-      ([a, b, c]) =>
-        `<div class="setting-row"><div><h3>${a}</h3><p>${b}</p></div><code>${esc(c)}</code></div>`,
-    )
+    .map(([n, t, d]) => `<div><span>${n}</span><section><h3>${t}</h3><p>${d}</p></section></div>`)
     .join(
       '',
-    )}</section>${!isDemo ? `<section class="panel"><h2>API access</h2><p>The key is stored in sessionStorage and sent to the server in the X-API-Key header.</p><form id="auth-form"><label class="field">API key<input type="password" name="key" placeholder="APP_API_KEY" autocomplete="off" value="${esc(sessionStorage.getItem('supportops-api-key') || '')}"></label><button class="btn btn-primary" type="submit">Save and connect</button></form></section>` : ''}<section class="panel"><h2>Connect an external model</h2><p>Set secrets through the server environment or Secrets Manager. They are never sent to the browser.</p><pre class="code-block">MODEL_PROVIDER=openai_compatible
-LLM_BASE_URL=https://your-provider.example/v1
-LLM_MODEL=your-model-id
-LLM_API_KEY=…</pre><div class="notice-card">${icon('shield')}The model selects verified fact IDs and tone. Trusted code renders facts and permitted actions from the order API and current policies.</div></section>${isDemo ? `<section class="panel"><h2>Demo data</h2><p>Reset removes only this demo’s local changes in the current browser.</p><button class="btn" data-action="reset-demo">${icon('refresh')}Reset demo</button></section>` : ''}`;
+    )}</div><div class="welcome-proof">${icon('shield')}A separate workspace for every business.<br>Your team decides what reaches your customers.</div></section><section class="signup-card"><span class="badge badge-review">${icon(join ? 'human' : 'spark')}${join ? 'You’re invited' : mode === 'login' ? 'Welcome back' : 'A fresh start for your team'}</span><h2>${join ? 'Join your team' : mode === 'login' ? 'Sign in to your workspace' : 'Create your workspace'}</h2><p>${join ? 'Use the email address your invitation was sent to. Already have an account? Enter your existing password.' : mode === 'login' ? 'Your policies, tickets and team are right where you left them.' : 'Start with your business. Add your knowledge as you go.'}</p><form id="platform-auth" data-mode="${mode}">${mode !== 'login' ? '<label class="field">Your full name<input name="name" required minlength="2" maxlength="100" autocomplete="name" placeholder="Alex Morgan"></label>' : ''}${mode === 'register' ? '<label class="field">Business name<input name="business_name" required minlength="2" maxlength="120" autocomplete="organization" placeholder="Acme Services"></label><label class="field">Industry<input name="industry" maxlength="80" placeholder="e.g. Hospitality, consulting, retail" value=""></label>' : ''}<label class="field">Work email<input name="email" type="email" required maxlength="160" autocomplete="email" placeholder="alex@yourcompany.com"></label><label class="field">Password<input name="password" type="password" required minlength="${mode === 'login' ? 1 : 12}" maxlength="128" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}" placeholder="${mode === 'login' ? 'Your password' : 'At least 12 characters'}"></label><div class="form-error" role="alert"></div><button class="btn btn-primary auth-submit" type="submit">${join ? 'Accept invitation' : mode === 'login' ? 'Sign in' : 'Create workspace'} ${icon('arrow')}</button></form>${config.demo_available && !join ? '<div class="auth-divider"><span>Want a look around first?</span></div><button class="btn auth-submit" data-action="start-demo">Explore a sample workspace</button><p class="auth-footnote">A separate demo with synthetic tickets. Your business starts with a clean workspace.</p>' : ''}<p class="auth-footnote">${join ? 'Your workspace owner sets your role and access.' : mode === 'login' ? 'Need access to a team? Ask your workspace owner for an invitation link.' : 'You’ll be the workspace owner. Invite your team whenever you’re ready.'}</p></section></main><footer class="public-footer"><span>SupportOps AI</span><span>Your knowledge. A human touch.</span></footer></div>`;
+}
+function onboarding() {
+  if (retailDemo() || state.tickets.length || !canManage()) return '';
+  return `<section class="onboarding"><div><span class="eyebrow">MAKE YOURSELF AT HOME</span><h2>Let’s set up ${esc(businessName())}</h2><p>Build a knowledge base your team can trust.</p></div><div class="onboarding-steps"><a href="#knowledge"><b>${state.docs.some((d) => !d.archived) ? '✓' : '1'}</b><span>Add your policies<small>Upload a file or write a rule</small></span>${icon('arrow')}</a><a href="#templates"><b>2</b><span>Set your voice<small>Customize reply templates</small></span>${icon('arrow')}</a><a href="#team"><b>3</b><span>Invite your people<small>Give your team access</small></span>${icon('arrow')}</a></div></section>`;
+}
+function templatesPage() {
+  return `${heading('Reply templates', 'Your voice, with verified facts woven in.', canManage() ? '<button class="btn" data-action="import-templates">Import templates</button><button class="btn btn-primary" data-action="new-template">' + icon('plus') + 'New template</button>' : '')}<div class="info-strip">${icon('info')}Templates control the wording. The {{facts}} placeholder adds verified excerpts from your current policies.</div><div class="document-grid">${state.templates.map((t) => `<button class="document-card" data-edit-template="${esc(t.id)}"><span class="document-icon">${icon('file')}</span><h3>${esc(t.name)}</h3><p class="template-preview">${esc(t.body)}</p><div class="source-meta"><span>${esc(t.category)}</span><span>Revision ${t.revision}</span><span class="badge ${t.active ? 'badge-review' : ''}">${t.active ? 'Active' : 'Disabled'}</span></div></button>`).join('') || '<div class="empty">No templates yet. Create one or import your existing templates.</div>'}</div>`;
+}
+function teamPage() {
+  if (!canManage())
+    return `${heading('Team', 'Your workspace members.')}<section class="panel">Ask your workspace owner to manage team access.</section>`;
+  const owner = account.organization.role === 'owner';
+  return `${heading('Your team', 'Bring everyone onto the same page. Give each person the right access.', '<button class="btn btn-primary" data-action="invite">' + icon('plus') + 'Invite a teammate</button>')}<section class="panel"><h2>Members <span class="mini-tag">${state.members.filter((m) => m.active).length} active</span></h2><p>Owners manage the business. Admins maintain content and invite agents. Agents work on tickets.</p><div class="table-scroll"><table class="data-table"><thead><tr><th>Person</th><th>Email</th><th>Role</th><th>Access</th><th></th></tr></thead><tbody>${state.members.map((m) => `<tr><td><strong>${esc(m.name)}</strong>${m.id === account.user.id ? ' <span class="mini-tag">You</span>' : ''}</td><td>${esc(m.email)}</td><td>${esc(m.role)}</td><td><span class="badge ${m.active ? 'badge-review' : ''}">${m.active ? 'Active' : 'Removed'}</span></td><td>${m.id !== account.user.id && m.role !== 'owner' && (owner || m.role !== 'admin') ? `<button class="btn" data-member="${esc(m.id)}">Manage</button>` : ''}</td></tr>`).join('')}</tbody></table></div></section><section class="panel"><h2>Invitations</h2><p>Share invitation links yourself. Invitations expire after 7 days and can be used once.</p><div class="table-scroll"><table class="data-table"><thead><tr><th>Email</th><th>Role</th><th>Expires</th><th>Status</th><th></th></tr></thead><tbody>${state.invitations.map((i) => `<tr><td>${esc(i.email)}</td><td>${esc(i.role)}</td><td>${fmtDate(i.expires_at)}</td><td>${i.accepted ? 'Accepted' : i.revoked ? 'Revoked' : new Date(i.expires_at) < new Date() ? 'Expired' : 'Pending'}</td><td>${!i.accepted && !i.revoked && new Date(i.expires_at) > new Date() ? `<button class="btn" data-revoke="${esc(i.id)}">Revoke</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5">No invitations yet.</td></tr>'}</tbody></table></div></section>`;
+}
+function workspaceSettings() {
+  const org = account.organization;
+  return `${heading('Workspace settings', 'A home for your business and your team.')}<section class="panel"><h2>${esc(businessName())}</h2><p>${esc(org?.role || 'No workspace')} access · ${esc(account.user.email)}</p>${org && canManage() ? `<form id="workspace-settings"><div class="form-grid"><label class="field">Business name<input name="name" value="${esc(org.name)}" required minlength="2" maxlength="120"></label><label class="field">Industry<input name="industry" value="${esc(org.industry || '')}" required maxlength="80"></label></div><button class="btn btn-primary">Save changes</button></form>` : '<p>Your owner or admin manages business settings.</p>'}</section><section class="panel"><h2>Your workspaces</h2><p>Each business has its own policies, templates, tickets and team.</p>${account.memberships.map((m) => `<div class="setting-row"><div><h3>${esc(m.name)}</h3><p>${esc(m.industry)} · ${esc(m.role)}${m.is_demo ? ' · Sample workspace' : ''}</p></div>${m.id === org?.id ? '<span class="badge badge-review">Current</span>' : `<button class="btn" data-switch="${esc(m.id)}">Switch workspace</button>`}</div>`).join('')}<button class="btn" data-action="${org?.is_demo ? 'register-business' : 'new-workspace'}" style="margin-top:18px">${icon('plus')}${org?.is_demo ? 'Register your business' : 'Create another business'}</button></section><section class="panel"><h2>How replies work</h2><p>Current policies are retrieved only from this workspace. Your selected template wraps the verified excerpts. An employee reviews every reply before copying it to a customer.</p><div class="notice-card">${icon('info')}Customer account and order systems are not connected to new workspaces. Requests that need live account facts require a human check. Approved replies are saved here; they are not sent automatically.</div></section>${canManage() ? `<section class="panel"><h2>Recent workspace activity</h2><div class="table-scroll"><table class="data-table"><thead><tr><th>Action</th><th>When</th><th>Details</th></tr></thead><tbody>${state.audit.map((a) => `<tr><td>${esc(a.action.replaceAll('_', ' '))}</td><td>${fmtDate(a.created_at)}</td><td><code>${esc(JSON.stringify(a.details))}</code></td></tr>`).join('') || '<tr><td colspan="3">Activity will appear as your team uses the workspace.</td></tr>'}</tbody></table></div></section>` : ''}`;
+}
+function policyEditor(source = null, upload = false) {
+  modal(
+    source ? 'Publish a new version' : upload ? 'Upload a policy' : 'Add a policy',
+    'Only your workspace can use this content. Publish clear, factual rules your team can rely on.',
+    `<form id="policy-form" data-upload="${upload}" data-key="${esc(source?.key || '')}"><div class="form-grid"><label class="field">Policy title<input name="title" required minlength="3" maxlength="180" value="${esc(source?.title || '')}" placeholder="Appointment cancellation policy"></label><label class="field">Category<input name="category" required maxlength="80" value="${esc(source?.category || 'other')}"></label></div><div class="form-grid"><label class="field">Version<input name="version" required maxlength="30" value="${source ? '' : '1'}" placeholder="e.g. 2"></label><label class="field">Effective from<input type="date" name="effective_from" required value="${new Date().toISOString().slice(0, 10)}"></label></div>${upload ? '<label class="field">Policy file<input name="file" type="file" required accept=".txt,.md,.pdf,.docx,.json"></label><p class="form-hint">TXT, Markdown, PDF, DOCX or JSON · up to 2 MB / 100,000 text characters. Scanned PDFs need text recognition before upload.</p>' : `<label class="field">Policy text<textarea name="text" required minlength="20" maxlength="100000" rows="9" placeholder="Customers may cancel appointments up to 48 hours before their scheduled time…">${esc(source?.text || '')}</textarea></label>`}<div class="notice-card">${icon('info')}${source ? 'A new version replaces the previous version from its effective date. Earlier ticket sources stay intact.' : 'Upload one policy per document. Include the subject in the text so related questions can find it.'}</div><div class="form-error" role="alert"></div><div class="modal-actions"><button class="btn" type="button" data-action="close-modal">Cancel</button><button class="btn btn-primary">Publish policy</button></div></form>`,
+    true,
+  );
+}
+function templateEditor(id) {
+  const t = state.templates.find((t) => t.id === id);
+  modal(
+    t ? 'Edit reply template' : 'New reply template',
+    'Use {{facts}} exactly once. Your verified policy excerpts will appear there.',
+    `<form id="template-form" data-id="${esc(id || '')}"><div class="form-grid"><label class="field">Template name<input name="name" required minlength="3" maxlength="120" value="${esc(t?.name || '')}" placeholder="Friendly customer reply"></label><label class="field">Category<input name="category" required maxlength="80" value="${esc(t?.category || 'other')}"></label></div><label class="field">Reply body<textarea name="body" required maxlength="10000" rows="9" ${!canManage() ? 'readonly' : ''}>${esc(t?.body || 'Hi {{customer_name}},\n\n{{facts}}\n\nBest regards,\n{{agent_name}}\n{{business_name}}')}</textarea></label><p class="form-hint">Available variables: {{facts}}, {{customer_name}}, {{business_name}}, {{agent_name}}, {{subject}}, {{ticket_id}}. The “other” category is the default for all inquiries.</p><label class="field">Status<select name="active"><option value="true" ${t?.active !== false ? 'selected' : ''}>Active</option><option value="false" ${t?.active === false ? 'selected' : ''}>Disabled</option></select></label><div class="form-error" role="alert"></div><div class="modal-actions"><button class="btn" type="button" data-action="close-modal">Close</button>${canManage() ? '<button class="btn btn-primary">Save template</button>' : ''}</div></form>`,
+    true,
+  );
+}
+async function enteredWorkspace() {
+  resetWorkspace();
+  closeModal();
+  history.replaceState(null, '', '#tickets');
+  if (account.organization) await reload();
+  else state.page = 'settings';
+  render();
+}
+async function handlePlatformAction(el) {
+  const action = el.dataset.action;
+  if (el.dataset.editTemplate) {
+    templateEditor(el.dataset.editTemplate);
+    return true;
+  }
+  if (el.dataset.version) {
+    policyEditor(state.docs.find((d) => d.id === el.dataset.version));
+    return true;
+  }
+  if (el.dataset.archivePolicy) {
+    await request(`/knowledge/${el.dataset.archivePolicy}/archive`, { method: 'POST' });
+    closeModal();
+    await reload();
+    render();
+    toast('Policy archived. Previous ticket sources are preserved.');
+    return true;
+  }
+  if (el.dataset.switch) {
+    await authenticate('/auth/switch', { organization_id: el.dataset.switch });
+    await enteredWorkspace();
+    return true;
+  }
+  if (el.dataset.revoke) {
+    await request(`/invitations/${el.dataset.revoke}/revoke`, { method: 'POST' });
+    await reload();
+    render();
+    toast('Invitation revoked');
+    return true;
+  }
+  if (el.dataset.member) {
+    const m = state.members.find((m) => m.id === el.dataset.member);
+    modal(
+      'Manage access',
+      m.email,
+      `<form id="member-form" data-id="${esc(m.id)}"><label class="field">Role<select name="role"><option value="agent" ${m.role === 'agent' ? 'selected' : ''}>Agent — work on tickets</option>${account.organization.role === 'owner' ? `<option value="admin" ${m.role === 'admin' ? 'selected' : ''}>Admin — manage content and agents</option>` : ''}</select></label><label class="field">Access<select name="active"><option value="true" ${m.active ? 'selected' : ''}>Active</option><option value="false" ${!m.active ? 'selected' : ''}>Remove workspace access</option></select></label><div class="form-error" role="alert"></div><div class="modal-actions"><button class="btn btn-primary">Save access</button></div></form>`,
+    );
+    return true;
+  }
+  switch (action) {
+    case 'reload-page':
+      location.reload();
+      return true;
+    case 'start-demo':
+      el.disabled = true;
+      try {
+        await authenticate('/auth/demo');
+        await enteredWorkspace();
+      } finally {
+        el.disabled = false;
+      }
+      return true;
+    case 'register-business':
+      await signOut();
+      closeModal();
+      resetWorkspace();
+      location.hash = 'register';
+      render();
+      return true;
+    case 'logout':
+      await signOut();
+      closeModal();
+      resetWorkspace();
+      location.hash = 'login';
+      render();
+      return true;
+    case 'switch-workspace':
+      state.page = 'settings';
+      location.hash = 'settings';
+      render();
+      return true;
+    case 'add-policy':
+      policyEditor();
+      return true;
+    case 'upload-policy':
+      policyEditor(null, true);
+      return true;
+    case 'new-template':
+      templateEditor();
+      return true;
+    case 'import-templates':
+      modal(
+        'Import reply templates',
+        'Import a JSON list of templates, or a text file containing one template.',
+        '<form id="template-import"><label class="field">Template file<input name="file" type="file" accept=".json,.txt,.md,.docx,.pdf" required></label><p class="form-hint">JSON: [{"name":"Friendly reply","category":"other","body":"Hi {{customer_name}}, {{facts}}"}]. Up to 50 templates; {{facts}} is required in each.</p><div class="form-error" role="alert"></div><div class="modal-actions"><button class="btn btn-primary">Import templates</button></div></form>',
+      );
+      return true;
+    case 'invite':
+      modal(
+        'Invite a teammate',
+        'Create a personal link and share it directly with your teammate.',
+        `<form id="invite-form"><label class="field">Teammate’s email<input name="email" type="email" required maxlength="160" placeholder="james@yourcompany.com"></label><label class="field">Role<select name="role"><option value="agent">Agent — work on tickets and review replies</option>${account.organization.role === 'owner' ? '<option value="admin">Admin — manage policies, templates and agents</option>' : ''}</select></label><div class="notice-card">${icon('link')}You’ll receive a one-time link. No email is sent automatically.</div><div class="form-error" role="alert"></div><div class="modal-actions"><button class="btn btn-primary">Create invitation link</button></div></form>`,
+      );
+      return true;
+    case 'copy-invite':
+      await navigator.clipboard.writeText($('#invite-link').value);
+      toast('Invitation link copied');
+      return true;
+    case 'new-workspace':
+      modal(
+        'Create another workspace',
+        'A separate business with its own team and knowledge.',
+        '<form id="new-workspace-form"><label class="field">Business name<input name="name" required minlength="2" maxlength="120"></label><label class="field">Industry<input name="industry" required maxlength="80" value="General business"></label><div class="form-error" role="alert"></div><div class="modal-actions"><button class="btn btn-primary">Create workspace</button></div></form>',
+      );
+      return true;
+  }
+  return false;
+}
+async function handlePlatformSubmit(form) {
+  const ids = [
+    'platform-auth',
+    'policy-form',
+    'template-form',
+    'template-import',
+    'invite-form',
+    'member-form',
+    'workspace-settings',
+    'new-workspace-form',
+  ];
+  if (!ids.includes(form.id)) return false;
+  const button = form.querySelector('button[type="submit"],button.btn-primary');
+  button.disabled = true;
+  const error = form.querySelector('.form-error');
+  if (error) error.textContent = '';
+  try {
+    const data = Object.fromEntries(new FormData(form));
+    if (form.id === 'platform-auth') {
+      const mode = form.dataset.mode;
+      if (mode === 'register' && !data.industry) data.industry = 'General business';
+      if (mode === 'join') data.token = decodeURIComponent(location.hash.slice(6));
+      await authenticate(mode === 'join' ? '/auth/accept-invite' : `/auth/${mode}`, data);
+      await enteredWorkspace();
+      return true;
+    }
+    if (form.id === 'policy-form') {
+      if (form.dataset.upload === 'true') {
+        const multipart = new FormData(form);
+        if (form.dataset.key) multipart.set('key', form.dataset.key);
+        await request('/knowledge/upload', { method: 'POST', body: multipart });
+      } else {
+        if (form.dataset.key) data.key = form.dataset.key;
+        await request('/knowledge', { method: 'POST', body: data });
+      }
+    }
+    if (form.id === 'template-form') {
+      data.active = data.active === 'true';
+      const id = form.dataset.id;
+      if (id) data.revision = state.templates.find((t) => t.id === id).revision;
+      await request('/templates' + (id ? '/' + id : ''), {
+        method: id ? 'PATCH' : 'POST',
+        body: data,
+      });
+    }
+    if (form.id === 'template-import')
+      await request('/templates/upload', { method: 'POST', body: new FormData(form) });
+    if (form.id === 'invite-form') {
+      const invite = await request('/invitations', { method: 'POST', body: data });
+      const url = location.origin + '/#join/' + invite.token;
+      await reload();
+      render();
+      modal(
+        'Your invitation is ready',
+        'Share this link with ' + data.email + '. It expires in 7 days.',
+        `<label class="field">Invitation link<input id="invite-link" readonly value="${esc(url)}"></label><div class="notice-card">${icon('shield')}This link is shown once. Copy it before closing. No email has been sent.</div><div class="modal-actions"><button class="btn" data-action="close-modal">Done</button><button class="btn btn-primary" data-action="copy-invite">${icon('copy')}Copy link</button></div>`,
+      );
+      return true;
+    }
+    if (form.id === 'member-form') {
+      data.active = data.active === 'true';
+      await request('/members/' + form.dataset.id, { method: 'PATCH', body: data });
+    }
+    if (form.id === 'workspace-settings') {
+      await request('/organization', { method: 'PATCH', body: data });
+      await refreshAccount();
+    }
+    if (form.id === 'new-workspace-form') {
+      await authenticate('/organizations', data);
+      await enteredWorkspace();
+      return true;
+    }
+    closeModal();
+    await reload();
+    render();
+    toast('Changes saved');
+  } catch (e) {
+    if (error) error.textContent = e.message;
+    else fail(e);
+  } finally {
+    if (button?.isConnected) button.disabled = false;
+  }
+  return true;
 }
 
 function modal(title, subtitle, body, wide = false) {
@@ -405,8 +711,13 @@ function newTicket() {
   creationKey = crypto.randomUUID();
   modal(
     'New ticket',
-    'Create a ticket for a Listva customer.',
-    `<form id="ticket-form"><div class="form-grid"><label class="field">Customer name<input name="customer" required minlength="2" maxlength="100" placeholder="Emma Wilson"></label><label class="field">Email<input name="email" type="email" placeholder="customer@example.test" maxlength="160"></label></div><div class="form-grid"><label class="field">Order number<input name="order_id" inputmode="numeric" pattern="[0-9]{4,12}" placeholder="1042"></label><label class="field">Channel<select name="channel"><option value="email">Email</option><option value="chat">Chat</option><option value="web">Web form</option></select></label></div><label class="field">Subject<input name="subject" required minlength="3" maxlength="180" placeholder="For example, a delayed delivery"></label><label class="field">Customer message<textarea name="message" required minlength="10" maxlength="5000" placeholder="Describe the customer’s request…"></textarea></label><label class="field">Priority<select name="priority"><option value="normal">Normal</option><option value="high">High</option></select></label><div class="notice-card">${icon('info')}Test orders: 1042–1049. The customer must match the order. For order 1042, use Emma Wilson.</div><div class="modal-actions"><button class="btn" type="button" data-action="fill-example">Use an example</button><button class="btn btn-primary" type="submit">${icon('plus')}Create ticket</button></div></form>`,
+    'Create a customer request for ' + businessName() + '.',
+    `<form id="ticket-form"><div class="form-grid"><label class="field">Customer name<input name="customer" required minlength="2" maxlength="100" placeholder="Emma Wilson"></label><label class="field">Email<input name="email" type="email" placeholder="customer@example.test" maxlength="160"></label></div><div class="form-grid">${retailDemo() ? `<label class="field">Order number<input name="order_id" inputmode="numeric" pattern="[0-9]{4,12}" placeholder="1042"></label>` : '<input name="order_id" type="hidden" value="">'}<label class="field">Channel<select name="channel"><option value="email">Email</option><option value="chat">Chat</option><option value="web">Web form</option></select></label></div><label class="field">Subject<input name="subject" required minlength="3" maxlength="180" placeholder="For example, a delayed delivery"></label><label class="field">Customer message<textarea name="message" required minlength="10" maxlength="5000" placeholder="Describe the customer’s request…"></textarea></label><label class="field">Priority<select name="priority"><option value="normal">Normal</option><option value="high">High</option></select></label>${retailDemo() ? `<div class="notice-card">${icon('info')}Sample orders: 1042–1049. For order 1042, use Emma Wilson.</div>` : `<div class="notice-card">${icon('book')}Replies use your uploaded policies. No order system is connected yet.</div>`}<label class="field">Reply template<select name="template_id"><option value="">Automatic — matching category or default</option>${state.templates
+      .filter((t) => t.active)
+      .map((t) => `<option value="${esc(t.id)}">${esc(t.name)}</option>`)
+      .join(
+        '',
+      )}</select></label><div class="modal-actions"><button class="btn" type="button" data-action="fill-example">Use an example</button><button class="btn btn-primary" type="submit">${icon('plus')}Create ticket</button></div></form>`,
   );
 }
 function showDoc(id) {
@@ -415,7 +726,7 @@ function showDoc(id) {
   if (!d) return;
   modal(
     d.title,
-    'Listva store policy source',
+    businessName() + ' · policy source',
     `<div class="source-meta"><span class="badge badge-review">v${esc(d.version)}</span><span>Effective from ${fmtDate(d.effective_from, { day: 'numeric', month: 'long', year: 'numeric' })}</span>${d.effective_to ? `<span>Until ${fmtDate(d.effective_to)}</span>` : ''}</div><div class="modal-prose">${esc(d.text)}<h3 style="font-size:13px;margin-top:24px">Facts available for a reply</h3>${Object.entries(
       d.facts || {},
     )
@@ -425,7 +736,7 @@ function showDoc(id) {
       )
       .join(
         '',
-      )}</div><div class="modal-actions"><button class="btn" data-action="close-modal">Close</button></div>`,
+      )}</div><div class="modal-actions">${canManage() && state.docs.some((x) => x.id === d.id) ? `<button class="btn" data-version="${esc(d.id)}">Publish new version</button>${!d.archived ? `<button class="btn" data-archive-policy="${esc(d.id)}">Archive policy</button>` : ''}` : ''}<button class="btn" data-action="close-modal">Close</button></div>`,
     true,
   );
 }
@@ -561,6 +872,7 @@ document.addEventListener('click', async (e) => {
   }
   const a = el.dataset.action;
   try {
+    if (await handlePlatformAction(el)) return;
     switch (a) {
       case 'new':
         newTicket();
@@ -612,7 +924,7 @@ document.addEventListener('click', async (e) => {
         download(`${state.selected}-trace.json`, state.detail);
         break;
       case 'export-knowledge':
-        download('listva-knowledge.json', state.docs);
+        download('workspace-knowledge.json', state.docs);
         break;
       case 'export-eval':
         download('supportops-evaluation.json', state.evaluation);
@@ -627,6 +939,14 @@ document.addEventListener('click', async (e) => {
           message:
             'Order #1042 was supposed to arrive yesterday. Where is it, and can I cancel the purchase?',
         };
+        if (!retailDemo()) {
+          values.order_id = '';
+          values.subject = 'Question about your policy';
+          values.message =
+            'Could you explain your ' +
+            (state.docs.find((d) => !d.archived)?.title || 'cancellation policy') +
+            '?';
+        }
         for (const [k, v] of Object.entries(values)) form.elements[k].value = v;
         break;
       }
@@ -723,12 +1043,14 @@ document.addEventListener('input', (e) => {
 document.addEventListener('submit', async (e) => {
   e.preventDefault();
   const form = e.target;
+  if (await handlePlatformSubmit(form)) return;
   if (form.id === 'ticket-form') {
     const button = form.querySelector('[type="submit"]');
     button.disabled = true;
     try {
       const values = Object.fromEntries(new FormData(form));
       values.order_id = values.order_id || null;
+      values.template_id = values.template_id || null;
       const t = await request('/tickets', {
         method: 'POST',
         body: values,
@@ -750,18 +1072,9 @@ document.addEventListener('submit', async (e) => {
     }
   }
   if (form.id === 'escalate-form') await review('escalate', new FormData(form).get('note'));
-  if (form.id === 'auth-form') {
-    sessionStorage.setItem('supportops-api-key', new FormData(form).get('key'));
-    try {
-      await reload();
-      render();
-      toast('Connection established');
-    } catch (err) {
-      fail(err);
-    }
-  }
 });
 document.addEventListener('keydown', (e) => {
+  if (!account) return;
   if (e.key === 'Escape') {
     closeModal();
     return;
@@ -798,28 +1111,39 @@ document.addEventListener('keydown', (e) => {
   }
 });
 window.addEventListener('hashchange', () => {
+  if (!account) {
+    render();
+    return;
+  }
+  if (location.hash.startsWith('#join/')) {
+    renderJoinPrompt();
+    return;
+  }
   const p = location.hash.slice(1);
   if (pages[p]) {
     state.page = p;
     render();
   }
 });
+function renderJoinPrompt() {
+  modal(
+    'Join another team',
+    'An invitation must be accepted with the email address it was sent to.',
+    '<p class="modal-prose">Sign out, then open this invitation link again to join the workspace. If you already have an account, use your existing password.</p><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn btn-primary" data-action="logout">Sign out</button></div>',
+  );
+}
 try {
   await init();
-  try {
-    await reload();
-  } catch (err) {
-    if (err.status === 401) {
-      state.page = 'settings';
-      render();
-      toast('Enter your API key in Settings', true);
-    } else throw err;
-  }
-  if (state.page !== 'settings') {
-    state.page = pages[location.hash.slice(1)] ? location.hash.slice(1) : 'tickets';
-    render();
-  }
+  if (account?.organization) await reload();
+  state.page =
+    account && !account.organization
+      ? 'settings'
+      : pages[location.hash.slice(1)]
+        ? location.hash.slice(1)
+        : 'tickets';
+  render();
+  if (account && location.hash.startsWith('#join/')) renderJoinPrompt();
 } catch (e) {
   $('#app').innerHTML =
-    `<div class="error-screen"><h2>Could not open the workspace</h2><p>${esc(e.message)}</p><p>Check that the SupportOps server is running and reachable.</p><button class="btn" data-action="refresh">${icon('refresh')}Try again</button></div>`;
+    `<div class="error-screen"><h2>Could not open the workspace</h2><p>${esc(e.message)}</p><p>Check that the SupportOps server is running and reachable.</p><button class="btn" data-action="reload-page">Try again</button></div>`;
 }

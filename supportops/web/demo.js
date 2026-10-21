@@ -151,7 +151,7 @@ function simulate(t, fault) {
     draft =
       'Hello! We understand that waiting for your order can be frustrating.\n\n' +
       required.map((k) => facts[k]).join('\n\n') +
-      '\n\nPlease let us know if you need help with the next steps.\nWarm regards, the Listva team';
+      '\n\nPlease let us know if you need help with the next steps.\nWarm regards, the Northstar Goods team';
     sources = sources.filter((d) => required.some((k) => k in d.facts));
   }
   return {

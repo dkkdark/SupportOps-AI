@@ -45,6 +45,14 @@ def build():
                 orders_transport=httpx.MockTransport(handle),
             )
         ) as c:
+            c.post("/api/auth/demo").raise_for_status()
+            account = c.get("/api/auth/me").json()
+            c.headers.update(
+                {
+                    "X-CSRF-Token": account["csrf_token"],
+                    "X-Workspace-ID": account["organization"]["id"],
+                }
+            )
             for id in ("SO-1284", "SO-1283", "SO-1282", "SO-1281"):
                 c.post(f"/api/tickets/{id}/analyze", json={})
             tickets = c.get("/api/tickets").json()
