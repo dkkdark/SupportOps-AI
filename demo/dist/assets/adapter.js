@@ -6,7 +6,14 @@ export async function init() {
   if (isDemo) {
     demo = (await import('./demo.js')).demo;
     await demo.init();
-    config = { mode: 'demo', provider: 'baseline', version: '0.3.0', faults_enabled: true };
+    config = {
+      demo_release: true,
+      demo_ai_budget_usd: 5,
+      mode: 'demo',
+      provider: 'baseline',
+      version: '0.3.0',
+      faults_enabled: true,
+    };
     account = {
       user: { name: 'Alex Morgan', email: 'alex@example.test' },
       organization: {

@@ -12,13 +12,13 @@
       "status": "review",
       "category": "delivery",
       "result": {
-        "organization_id": "56736cd7d3a5442e88c45548dede89df",
+        "organization_id": "4fe135645dfa41739fed23ff7f4f37d2",
         "business_name": "Northstar Goods",
         "workflow_mode": "retail_demo",
         "agent_name": "Alex Morgan",
         "template_id": null,
         "template": {
-          "id": "e65c9d9e7c974807b2d7687e1337d1f1",
+          "id": "4f96b10d0e324a91b1bcfd0785cb5827",
           "revision": 1,
           "body": "Hi {{customer_name}},\n\n{{facts}}\n\nPlease let us know if you need any further help.\nBest regards,\n{{business_name}} Support"
         },
@@ -180,15 +180,15 @@
           },
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "56736cd7d3a5442e88c45548dede89df",
+          "organization_id": "4fe135645dfa41739fed23ff7f4f37d2",
           "template": {
-            "id": "e65c9d9e7c974807b2d7687e1337d1f1",
+            "id": "4f96b10d0e324a91b1bcfd0785cb5827",
             "revision": 1
           }
         },
         "credit_budget_usd": 0.4,
         "duration_ms": null,
-        "thread_id": "56736cd7d3a5442e88c45548dede89df:SO-1284:1"
+        "thread_id": "4fe135645dfa41739fed23ff7f4f37d2:SO-1284:1"
       },
       "revision": 1,
       "template_id": null,
@@ -197,7 +197,7 @@
       "intake_id": null,
       "external_id": null,
       "created_at": "2026-10-21T12:48:00",
-      "updated_at": "2026-10-21T16:37:46.752773",
+      "updated_at": "2026-10-21T17:32:37.913214",
       "reviews": []
     },
     {
@@ -212,13 +212,13 @@
       "status": "review",
       "category": "returns",
       "result": {
-        "organization_id": "56736cd7d3a5442e88c45548dede89df",
+        "organization_id": "4fe135645dfa41739fed23ff7f4f37d2",
         "business_name": "Northstar Goods",
         "workflow_mode": "retail_demo",
         "agent_name": "Alex Morgan",
         "template_id": null,
         "template": {
-          "id": "e65c9d9e7c974807b2d7687e1337d1f1",
+          "id": "4f96b10d0e324a91b1bcfd0785cb5827",
           "revision": 1,
           "body": "Hi {{customer_name}},\n\n{{facts}}\n\nPlease let us know if you need any further help.\nBest regards,\n{{business_name}} Support"
         },
@@ -377,15 +377,15 @@
           },
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "56736cd7d3a5442e88c45548dede89df",
+          "organization_id": "4fe135645dfa41739fed23ff7f4f37d2",
           "template": {
-            "id": "e65c9d9e7c974807b2d7687e1337d1f1",
+            "id": "4f96b10d0e324a91b1bcfd0785cb5827",
             "revision": 1
           }
         },
         "credit_budget_usd": 0.4,
         "duration_ms": null,
-        "thread_id": "56736cd7d3a5442e88c45548dede89df:SO-1283:1"
+        "thread_id": "4fe135645dfa41739fed23ff7f4f37d2:SO-1283:1"
       },
       "revision": 1,
       "template_id": null,
@@ -394,7 +394,7 @@
       "intake_id": null,
       "external_id": null,
       "created_at": "2026-10-21T12:43:00",
-      "updated_at": "2026-10-21T16:37:46.772655",
+      "updated_at": "2026-10-21T17:32:37.934605",
       "reviews": []
     },
     {
@@ -409,13 +409,13 @@
       "status": "review",
       "category": "cancellation",
       "result": {
-        "organization_id": "56736cd7d3a5442e88c45548dede89df",
+        "organization_id": "4fe135645dfa41739fed23ff7f4f37d2",
         "business_name": "Northstar Goods",
         "workflow_mode": "retail_demo",
         "agent_name": "Alex Morgan",
         "template_id": null,
         "template": {
-          "id": "e65c9d9e7c974807b2d7687e1337d1f1",
+          "id": "4f96b10d0e324a91b1bcfd0785cb5827",
           "revision": 1,
           "body": "Hi {{customer_name}},\n\n{{facts}}\n\nPlease let us know if you need any further help.\nBest regards,\n{{business_name}} Support"
         },
@@ -545,15 +545,15 @@
           },
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "56736cd7d3a5442e88c45548dede89df",
+          "organization_id": "4fe135645dfa41739fed23ff7f4f37d2",
           "template": {
-            "id": "e65c9d9e7c974807b2d7687e1337d1f1",
+            "id": "4f96b10d0e324a91b1bcfd0785cb5827",
             "revision": 1
           }
         },
         "credit_budget_usd": 0.4,
         "duration_ms": null,
-        "thread_id": "56736cd7d3a5442e88c45548dede89df:SO-1282:1"
+        "thread_id": "4fe135645dfa41739fed23ff7f4f37d2:SO-1282:1"
       },
       "revision": 1,
       "template_id": null,
@@ -562,7 +562,7 @@
       "intake_id": null,
       "external_id": null,
       "created_at": "2026-10-21T12:38:00",
-      "updated_at": "2026-10-21T16:37:46.789457",
+      "updated_at": "2026-10-21T17:32:37.954041",
       "reviews": []
     },
     {
@@ -577,13 +577,13 @@
       "status": "manual",
       "category": "damage",
       "result": {
-        "organization_id": "56736cd7d3a5442e88c45548dede89df",
+        "organization_id": "4fe135645dfa41739fed23ff7f4f37d2",
         "business_name": "Northstar Goods",
         "workflow_mode": "retail_demo",
         "agent_name": "Alex Morgan",
         "template_id": null,
         "template": {
-          "id": "e65c9d9e7c974807b2d7687e1337d1f1",
+          "id": "4f96b10d0e324a91b1bcfd0785cb5827",
           "revision": 1,
           "body": "Hi {{customer_name}},\n\n{{facts}}\n\nPlease let us know if you need any further help.\nBest regards,\n{{business_name}} Support"
         },
@@ -698,15 +698,15 @@
           },
           "embedding": "hash-char-ngrams-128-v1",
           "evaluation": "supportops-eval-v2-en",
-          "organization_id": "56736cd7d3a5442e88c45548dede89df",
+          "organization_id": "4fe135645dfa41739fed23ff7f4f37d2",
           "template": {
-            "id": "e65c9d9e7c974807b2d7687e1337d1f1",
+            "id": "4f96b10d0e324a91b1bcfd0785cb5827",
             "revision": 1
           }
         },
         "credit_budget_usd": 0.4,
         "duration_ms": null,
-        "thread_id": "56736cd7d3a5442e88c45548dede89df:SO-1281:1"
+        "thread_id": "4fe135645dfa41739fed23ff7f4f37d2:SO-1281:1"
       },
       "revision": 1,
       "template_id": null,
@@ -715,7 +715,7 @@
       "intake_id": null,
       "external_id": null,
       "created_at": "2026-10-21T12:33:00",
-      "updated_at": "2026-10-21T16:37:46.805737",
+      "updated_at": "2026-10-21T17:32:37.971651",
       "reviews": []
     },
     {
@@ -737,7 +737,7 @@
       "intake_id": null,
       "external_id": null,
       "created_at": "2026-10-21T11:28:00",
-      "updated_at": "2026-10-21T16:37:46.710461",
+      "updated_at": "2026-10-21T17:32:37.869137",
       "reviews": []
     },
     {
@@ -759,7 +759,7 @@
       "intake_id": null,
       "external_id": null,
       "created_at": "2026-10-21T11:23:00",
-      "updated_at": "2026-10-21T16:37:46.710461",
+      "updated_at": "2026-10-21T17:32:37.869138",
       "reviews": []
     },
     {
@@ -781,7 +781,7 @@
       "intake_id": null,
       "external_id": null,
       "created_at": "2026-10-21T11:18:00",
-      "updated_at": "2026-10-21T16:37:46.710462",
+      "updated_at": "2026-10-21T17:32:37.869138",
       "reviews": []
     },
     {
@@ -803,7 +803,7 @@
       "intake_id": null,
       "external_id": null,
       "created_at": "2026-10-21T11:13:00",
-      "updated_at": "2026-10-21T16:37:46.710463",
+      "updated_at": "2026-10-21T17:32:37.869139",
       "reviews": []
     }
   ],

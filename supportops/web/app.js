@@ -129,7 +129,7 @@ const pages = {
   team: 'Team',
   types: 'Request types',
   sources: 'Request sources',
-  billing: 'Plan & usage',
+  billing: 'AI usage',
 };
 
 function toast(text, error = false) {
@@ -275,7 +275,7 @@ function render() {
   }
   document.title = `SupportOps AI · ${pages[state.page]}`;
   $('#app').innerHTML =
-    `<div class="app-shell">${sidebar()}<main class="main"><header class="topbar"><div class="breadcrumbs"><span>Workspace</span>${icon('chevron')}<b>${pages[state.page]}</b></div><div class="top-actions"><span class="system-status"><i class="status-dot"></i>${isDemo ? 'Browser demo' : 'API connected'}</span><i class="top-divider"></i><button class="icon-btn" data-action="activity" aria-label="Recent activity">${icon('bell')}</button><div class="avatar" aria-label="${esc(account.user.name)}">${esc(initials(account.user.name))}</div></div></header>${isDemo ? `<div class="demo-banner"><span>${icon('info')}Interactive demo · synthetic data · changes are saved in this browser</span><button data-action="demo-info">About the demo ${icon('arrow')}</button></div>` : ''}<div class="content">${!isDemo && config.provider === 'openai' && !config.ai_configured ? `<div class="info-strip">${icon('info')}The service operator must configure OpenAI before AI processing is available. Manual requests and your workspace remain usable.</div>` : ''}${account.user.email_verified === false && config.email_delivery_enabled ? `<div class="verification-strip">${icon('mail')}Verify your work email to activate the production workspace.<button class="btn" data-action="verify-email">Send verification link</button></div>` : ''}${pageContent()}</div></main></div>`;
+    `<div class="app-shell">${sidebar()}<main class="main"><header class="topbar"><div class="breadcrumbs"><span>Workspace</span>${icon('chevron')}<b>${pages[state.page]}</b></div><div class="top-actions"><span class="system-status"><i class="status-dot"></i>${isDemo ? 'Browser demo' : 'API connected'}</span><i class="top-divider"></i><button class="icon-btn" data-action="activity" aria-label="Recent activity">${icon('bell')}</button><div class="avatar" aria-label="${esc(account.user.name)}">${esc(initials(account.user.name))}</div></div></header>${isDemo ? `<div class="demo-banner"><span>${icon('info')}Interactive demo · synthetic data · changes are saved in this browser</span><button data-action="demo-info">About the demo ${icon('arrow')}</button></div>` : ''}<div class="content">${demoBudgetBanner()}${!isDemo && config.provider === 'openai' && !config.ai_configured ? `<div class="info-strip">${icon('info')}The service operator must configure OpenAI before AI processing is available. Manual requests and your workspace remain usable.</div>` : ''}${account.user.email_verified === false && config.email_delivery_enabled ? `<div class="verification-strip">${icon('mail')}Verify your work email to activate the production workspace.<button class="btn" data-action="verify-email">Send verification link</button></div>` : ''}${pageContent()}</div></main></div>`;
   if (
     account &&
     state.page === 'knowledge' &&
@@ -383,7 +383,7 @@ function detailContent() {
   return `<div class="detail-top"><div class="ticket-id">${esc(t.id)}<span>•</span>${icon(channelIcon(t.channel))}${{ email: 'Email', chat: 'Chat', web: 'Web form', api: 'Inbound API', internal: 'Internal' }[t.channel] || esc(t.channel)}</div><div class="detail-top-right">${t.priority === 'high' ? '<span class="priority"><i class="priority-dot"></i>High priority</span>' : ''}<button class="icon-btn" data-action="copy-id" title="Copy ticket ID" aria-label="Copy ticket ID">${icon('copy')}</button></div></div><div class="detail-grid"><div class="conversation"><h2 class="ticket-title">${esc(t.subject)}</h2><div class="category-line">${(r?.categories?.length ? r.categories : [t.category]).map((c) => `<span class="category-tag">${categoryNames[c] || esc(c)}</span>`).join('')}${t.order_id ? `<span class="category-tag">Order #${esc(t.order_id)}</span>` : ''}</div><article class="message-card"><div class="message-head"><div class="avatar">${esc(initials(t.customer))}</div><div><strong>${esc(t.customer)}</strong><small>${esc(t.email || 'Requester')}</small></div><time class="message-time">${fmtDate(t.created_at)}</time></div><p>${esc(t.message).replace(/\n/g, '<br>')}</p></article><section class="ai-panel"><div class="ai-heading"><div class="ai-heading-title">${icon('spark')}SupportOps assistant</div><span class="badge">${retailDemo() ? 'Sample workflow' : r?.manifest?.engine === 'openai-agent-v1' ? 'OpenAI agent' : config.provider === 'baseline' ? 'Offline baseline' : 'OpenAI + verification'}</span></div>${state.busy ? `<div class="loading-line"></div><div class="empty">${icon('refresh', 'spinner')}Investigating the request and gathering evidence…</div>` : !r ? emptyDraft() : analysisContent(t, r)}</section>${reviewActions(t)}<p class="review-caption">${icon('shield')}Replies are never sent to customers automatically</p></div>${contextPanel(t, r)}</div>`;
 }
 function emptyDraft() {
-  return `<div class="empty"><div class="waiting-illustration">${icon('spark')}</div><strong>From a question to a grounded reply</strong>Check the order, find the right policies<br>and prepare a draft with clear sources.<br><button class="btn btn-primary" data-action="analyze">${icon('spark')}Prepare a reply</button></div>`;
+  return `<div class="empty"><div class="waiting-illustration">${icon('spark')}</div><strong>From a question to a grounded reply</strong>Check the order, find the right policies<br>and prepare a draft with clear sources.<br><button class="btn btn-primary" data-action="analyze" ${config.demo_release && state.billing?.limit_reached && !retailDemo() ? 'disabled title="Demo AI allowance reached"' : ''}>${icon('spark')}Prepare a reply</button></div>`;
 }
 function analysisContent(t, r) {
   return `<div class="detail-tabs" role="tablist" aria-label="Analysis results">${[
@@ -402,7 +402,7 @@ function analysisContent(t, r) {
 }
 function draftContent(t, r) {
   if (r.reason)
-    return `<div class="manual-box">${icon('human')}<b>An agent needs to take a look</b><p>${esc(reasonNames[r.reason] || r.reason)}</p>${r.handoff_reason ? `<p>${esc(r.handoff_reason)}</p>` : ''}${r.verifier?.issues?.length ? `<p>${esc(r.verifier.issues.join(' '))}</p>` : ''}<p style="margin-top:10px;font-size:10px">No verified draft was created. Available context and sources are preserved in this ticket.</p>${!['approved', 'escalated'].includes(t.status) ? `<button class="btn" data-action="analyze">${icon('refresh')}Retry analysis</button>` : ''}</div>`;
+    return `<div class="manual-box">${icon('human')}<b>An agent needs to take a look</b><p>${esc(reasonNames[r.reason] || r.reason)}</p>${r.handoff_reason ? `<p>${esc(r.handoff_reason)}</p>` : ''}${r.verifier?.issues?.length ? `<p>${esc(r.verifier.issues.join(' '))}</p>` : ''}<p style="margin-top:10px;font-size:10px">No verified draft was created. Available context and sources are preserved in this ticket.</p>${!['approved', 'escalated'].includes(t.status) ? `<button class="btn" data-action="analyze" ${config.demo_release && state.billing?.limit_reached && !retailDemo() ? 'disabled title="Demo AI allowance reached"' : ''}>${icon('refresh')}Retry analysis</button>` : ''}</div>`;
   const latest = (t.reviews || []).findLast?.((x) => x.decision === 'approve');
   const text = state.drafts[t.id] ?? latest?.text ?? r.draft;
   return `<div class="draft-body"><div class="verified-note">${icon('checkcircle')}Facts and policies verified · ready for your review</div>${state.drafts[t.id] && state.drafts[t.id] !== r.draft ? '<div class="revision-note">This draft was edited by an agent. Review any changed facts before approving.</div>' : ''}<label class="sr-only" for="draft-text">Reply draft</label><textarea id="draft-text" class="draft-text" ${t.status === 'approved' || t.status === 'escalated' ? 'readonly' : ''}>${esc(text || '')}</textarea><div class="draft-footer"><span>${icon('clock')}${ms(r.duration_ms)}${isDemo ? ' · simulated' : ''}</span><span>${t.status === 'approved' ? 'Approved by an agent' : 'Edit before approving'}<button class="icon-btn" data-action="copy-draft" aria-label="Copy reply" title="Copy reply">${icon('copy')}</button></span></div></div><div class="sources-inline">Sources${(
@@ -553,7 +553,7 @@ function publicPage() {
   const join = location.hash.startsWith('#join/');
   const mode = join ? 'join' : location.hash === '#login' ? 'login' : 'register';
   document.title = 'SupportOps AI · Support that knows your business';
-  const page = `<div class="public-shell"><header class="public-header"><a class="brand" href="#register"><span class="brand-mark">${icon('logo')}</span><span>SupportOps</span><em>AI</em></a><nav class="landing-nav"><a href="#how-it-works" data-scrollto="how-it-works">How it works</a><a href="#request-sources" data-scrollto="request-sources">Channels</a><a href="#pricing" data-scrollto="pricing">Pricing</a></nav><a class="btn" href="${account ? '#tickets' : mode === 'login' ? '#register' : '#login'}">${account ? 'Open workspace' : mode === 'login' ? 'Create a workspace' : 'Sign in'} ${icon('arrow')}</a></header><main class="welcome-grid"><section class="welcome-story"><span class="eyebrow">YOUR BUSINESS. YOUR KNOWLEDGE.</span><h1>Every request. <br>The right context. <br><em>A clearer next step.</em></h1><p>An AI workspace for the requests that keep your business moving. Connect incoming work, bring your knowledge and keep your people in control.</p><div class="welcome-steps">${[
+  const page = `<div class="public-shell"><header class="public-header"><a class="brand" href="#register"><span class="brand-mark">${icon('logo')}</span><span>SupportOps</span><em>AI</em></a><nav class="landing-nav"><a href="#how-it-works" data-scrollto="how-it-works">How it works</a><a href="#request-sources" data-scrollto="request-sources">Channels</a><a href="#${config.demo_release ? 'demo-access' : 'pricing'}" data-scrollto="${config.demo_release ? 'demo-access' : 'pricing'}">${config.demo_release ? 'Demo access' : 'Pricing'}</a></nav><a class="btn" href="${account ? '#tickets' : mode === 'login' ? '#register' : '#login'}">${account ? 'Open workspace' : mode === 'login' ? 'Create a workspace' : 'Sign in'} ${icon('arrow')}</a></header><main class="welcome-grid"><section class="welcome-story"><span class="eyebrow">${config.demo_release ? 'DEMO VERSION · ' : ''}YOUR BUSINESS. YOUR KNOWLEDGE.</span><h1>Every request. <br>The right context. <br><em>A clearer next step.</em></h1><p>An AI workspace for the requests that keep your business moving. Connect incoming work, bring your knowledge and keep your people in control.</p><div class="welcome-steps">${[
     ['01', 'Bring your knowledge', 'Upload your rules, procedures and service policies.'],
     ['02', 'Make it sound like you', 'Create reply templates that match your brand.'],
     ['03', 'Work better, together', 'Invite your team. Review every reply before sharing.'],
@@ -877,7 +877,7 @@ function landingSections() {
     )
     .join(
       '',
-    )}<p>Illustrative workflow · your actual rules determine the answer</p></div></section><section class="landing-section" id="pricing"><div class="section-intro"><span class="eyebrow">PREDICTABLE PLANS. CONTROLLED AI SPEND.</span><h2>Start small.<br>Grow with a clear budget.</h2><p>A workspace subscription for your team, with included AI credits. No automatic overage charges.</p></div>${planCards(false)}<p class="landing-footnote">14-day trial with 100 one-time AI credits and 3 team seats. AI credit use depends on tokens, document indexing and agent work. Paid credits renew with your billing period and do not roll over. Prices are in USD per workspace per month; applicable taxes may apply at checkout.</p></section><section class="landing-section trust-section"><div><span class="eyebrow">CLEAR BOUNDARIES</span><h2>Your workspace.<br>Your people in control.</h2></div><div>${[
+    )}<p>Illustrative workflow · your actual rules determine the answer</p></div></section>${config.demo_release ? demoAccessSection() : `<section class="landing-section" id="pricing"><div class="section-intro"><span class="eyebrow">PREDICTABLE PLANS. CONTROLLED AI SPEND.</span><h2>Start small.<br>Grow with a clear budget.</h2><p>A workspace subscription for your team, with included AI credits. No automatic overage charges.</p></div>${planCards(false)}<p class="landing-footnote">14-day trial with 100 one-time AI credits and 3 team seats. AI credit use depends on tokens, document indexing and agent work. Paid credits renew with your billing period and do not roll over. Prices are in USD per workspace per month; applicable taxes may apply at checkout.</p></section>`}<section class="landing-section trust-section"><div><span class="eyebrow">CLEAR BOUNDARIES</span><h2>Your workspace.<br>Your people in control.</h2></div><div>${[
     [
       'Separate business data',
       'Your requests, documents and team access are scoped to your company.',
@@ -888,7 +888,7 @@ function landingSections() {
     ],
     [
       'Visible usage',
-      'See your credit balance and model usage. Requests stop before exceeding the available AI budget.',
+      'See your AI usage and remaining allowance. Paid model calls pause when the demo budget is used.',
     ],
     [
       'No silent actions',
@@ -908,8 +908,8 @@ function landingSections() {
       'From your hosted form, a scoped inbound API, or your employees. Email and messaging tools need a configured adapter; SupportOps does not automatically read your inbox.',
     ],
     [
-      'What happens when AI credits run out?',
-      'New AI processing and indexing pause. Your team can still read and manually work on existing requests. Upgrade or wait for renewal to use AI again. No automatic top-ups or overage charges are applied.',
+      'What happens when the demo AI allowance runs out?',
+      'Paid AI processing and document indexing pause at the account limit. Your team can still create, read and manually handle requests. Purchasing is coming soon. We’ll email you when it launches if you reach the limit or request a notification.',
     ],
     [
       'Can I use my existing procedures?',
@@ -925,6 +925,25 @@ function landingSections() {
       '',
     )}<div class="landing-final-cta"><h2>Bring your next request<br>into a clearer process.</h2><button class="btn btn-primary" data-scrollto="signup">Create your workspace ${icon('arrow')}</button></div></section>`;
 }
+function demoAccessSection() {
+  return `<section class="landing-section" id="demo-access"><div class="section-intro"><span class="eyebrow">DEMO VERSION · OPEN TO EXPLORE</span><h2>Try your real workflow.<br>With a clear AI allowance.</h2><p>SupportOps AI is currently in demo. All workspace features are available, with $${Number(config.demo_ai_budget_usd || 5).toFixed(2)} of one-time AI usage per account across all your businesses.</p></div><div class="section-grid"><section class="panel"><h3>Explore with your team</h3><p>Create requests, invite colleagues, upload your rules and review drafts. Only calls to paid AI models count toward your allowance, including embeddings and verification.</p></section><section class="panel"><h3>Purchasing is coming soon</h3><p>When your AI allowance is used, paid AI calls pause. Your workspace stays available for manual work. We’ll email you when purchasing becomes available.</p><button class="btn btn-primary" ${account ? 'data-action="notify-launch"' : 'data-scrollto="signup"'}>${account ? 'Email me at launch' : 'Try the demo'} ${icon('arrow')}</button></section></div></section>`;
+}
+function demoBudgetBanner() {
+  if (!config.demo_release || isDemo) return '';
+  const b = state.billing || {};
+  return `<div class="info-strip demo-release-strip" role="status">${icon(b.limit_reached ? 'warning' : 'info')}<div><strong>${b.limit_reached ? 'Demo AI allowance reached' : 'Demo version · purchasing coming soon'}</strong><p>${b.limit_reached ? esc(b.message) : `Your account includes $${Number(b.limit_usd || config.demo_ai_budget_usd || 5).toFixed(2)} of one-time AI usage. We’ll email you when purchasing launches if you reach the limit or ask to be notified.`}</p></div><a class="btn" href="#billing">View AI usage</a></div>`;
+}
+function demoUsagePage() {
+  const b = state.billing || {},
+    money = (n) =>
+      Number(n || 0).toLocaleString('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 6,
+      });
+  return `${heading('Demo AI usage', 'A one-time allowance per account, shared across all your workspaces.')}<div class="metrics-row">${metric('AI allowance', money(b.limit_usd || config.demo_ai_budget_usd || 5), 'No monthly reset or expiry', 'grid')}${metric('Model usage', money(b.spent_usd), 'Embeddings, agent and verifier', 'spark')}${metric('Available now', money(b.remaining_usd), `${money(b.reserved_usd)} reserved by running work`, 'activity')}</div><section class="panel"><h2>${b.limit_reached ? 'Your demo AI allowance is used' : 'Your workspace is in demo'}</h2><p>${esc(b.message || 'Purchasing will be available soon.')}</p><div class="notice-card">${icon('info')}Only paid model operations use this allowance. Creating and reviewing requests, managing your team, editing templates and reading knowledge remain available. Costs are estimated from provider token usage and configured prices; unknown provider charges retain a reserve until reconciled.</div></section><section class="panel"><h2>Purchasing is coming soon</h2><p>${b.launch_email_requested ? `You’re on the launch notification list. We’ll email ${esc(account.user.email)} when purchasing becomes available.` : 'Ask for an email when purchasing becomes available. You can also keep exploring the demo.'}</p>${b.launch_email_requested ? '<span class="badge badge-review">Launch email requested</span>' : '<button class="btn btn-primary" data-action="notify-launch">Email me at launch</button>'}</section>`;
+}
 function planCards(inWorkspace = true) {
   return `<div class="pricing-grid">${state.plans
     .filter((p) => p.id !== 'pilot')
@@ -935,6 +954,7 @@ function planCards(inWorkspace = true) {
     .join('')}</div>`;
 }
 function billingPage() {
+  if (config.demo_release) return demoUsagePage();
   const b = state.billing || {},
     p = b.plan || {},
     used = b.used || {};
@@ -991,6 +1011,12 @@ async function businessAction(el) {
     return true;
   }
   switch (el.dataset.action) {
+    case 'notify-launch':
+      await request('/demo/launch-notification', { method: 'POST' });
+      await reload();
+      render();
+      toast('We’ll email you when purchasing launches.');
+      return true;
     case 'export-workspace':
       download('supportops-workspace.json', await request('/workspace/export'));
       return true;
@@ -1185,7 +1211,7 @@ function showDoc(id) {
       )
       .join(
         '',
-      )}</div><div class="modal-actions">${canManage() && state.docs.some((x) => x.id === d.id) ? `<button class="btn" data-reindex="${esc(d.id)}">Index / retry indexing</button><button class="btn" data-version="${esc(d.id)}">Publish new version</button>${!d.archived ? `<button class="btn" data-archive-policy="${esc(d.id)}">Archive policy</button>` : ''}` : ''}<button class="btn" data-action="close-modal">Close</button></div>`,
+      )}</div><div class="modal-actions">${canManage() && state.docs.some((x) => x.id === d.id) ? `<button class="btn" data-reindex="${esc(d.id)}" ${config.demo_release && state.billing?.limit_reached ? 'disabled' : ''}>Index / retry indexing</button><button class="btn" data-version="${esc(d.id)}">Publish new version</button>${!d.archived ? `<button class="btn" data-archive-policy="${esc(d.id)}">Archive policy</button>` : ''}` : ''}<button class="btn" data-action="close-modal">Close</button></div>`,
     true,
   );
 }
@@ -1224,6 +1250,7 @@ async function analyze(fault = 'none') {
         : 'Your draft is ready for review',
     );
   } catch (e) {
+    if (config.demo_release && e.status === 429) await reload();
     fail(e);
   } finally {
     state.busy = false;

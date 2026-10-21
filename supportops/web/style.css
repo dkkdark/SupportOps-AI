@@ -3157,3 +3157,14 @@ h1 {
   font-size: 13px;
   line-height: 1.9;
 }
+.demo-release-strip {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.demo-release-strip > div {
+  flex: 1 1 240px;
+}
+.demo-release-strip p {
+  margin: 6px 0 0;
+  line-height: 1.6;
+}
