@@ -1,10 +1,8 @@
 """Schema migration preserves existing single-business rows without exposing them."""
 
-from pathlib import Path
-import importlib.util
 from alembic.config import Config
 from alembic import command
-from sqlalchemy import text, inspect
+from sqlalchemy import text
 from supportops.db import make_database
 from supportops.migration import migrate
 

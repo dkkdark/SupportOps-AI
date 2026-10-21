@@ -433,6 +433,11 @@ class Auth:
             request: Request,
             actor: Identity = Depends(self.user),
         ):
+            if actor.organization and actor.organization.get("is_demo"):
+                raise HTTPException(
+                    403,
+                    "Register a business account first. Sample accounts cannot own a real business.",
+                )
             self.throttle(request, "new-workspace", actor.user_id, limit=10)
             with self.sessions() as db:
                 user = db.get(User, actor.user_id)

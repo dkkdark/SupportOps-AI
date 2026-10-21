@@ -5,7 +5,7 @@ from io import BytesIO
 from zipfile import ZipFile
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select, text
+from sqlalchemy import select
 from supportops.config import Settings
 from supportops.main import create_app
 from supportops.db import Invitation, LoginSession, User, utcnow
@@ -450,6 +450,9 @@ def test_demo_signup_is_isolated_and_production_disabled(platform, tmp_path):
     a, b, _ = platform
     a.post("/api/auth/demo")
     aa = account(a)
+    assert (
+        a.post("/api/organizations", json={"name": "Real Business"}).status_code == 403
+    )
     b.post("/api/auth/demo")
     bb = account(b)
     assert aa["organization"]["id"] != bb["organization"]["id"]
@@ -502,3 +505,39 @@ def test_auth_validation_redacts_password_and_throttles(platform):
         ).status_code
         == 429
     )
+
+
+def test_selectable_pdf_policy_can_prepare_a_grounded_reply(platform):
+    from pypdf import PdfWriter
+    from pypdf.generic import DictionaryObject, NameObject, DecodedStreamObject
+
+    a, _, _ = platform
+    register(a)
+    writer = PdfWriter()
+    page = writer.add_blank_page(width=612, height=792)
+    font = DictionaryObject(
+        {
+            NameObject("/Type"): NameObject("/Font"),
+            NameObject("/Subtype"): NameObject("/Type1"),
+            NameObject("/BaseFont"): NameObject("/Helvetica"),
+        }
+    )
+    page[NameObject("/Resources")] = DictionaryObject(
+        {NameObject("/Font"): DictionaryObject({NameObject("/F1"): font})}
+    )
+    stream = DecodedStreamObject()
+    stream.set_data(
+        b"BT /F1 12 Tf 50 700 Td (Appointment cancellation is free at least 48 hours in advance.) Tj ET"
+    )
+    page[NameObject("/Contents")] = writer._add_object(stream)
+    pdf = BytesIO()
+    writer.write(pdf)
+    r = a.post(
+        "/api/knowledge/upload",
+        data={"title": "PDF appointment policy"},
+        files={"file": ("appointments.pdf", pdf.getvalue(), "application/pdf")},
+    )
+    assert r.status_code == 201, r.text
+    assert "48 hours" in r.json()["text"]
+    result = a.post("/api/tickets/" + make_ticket(a)["id"] + "/analyze", json={}).json()
+    assert result["status"] == "review" and "48 hours" in result["result"]["draft"]
