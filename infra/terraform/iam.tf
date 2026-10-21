@@ -17,7 +17,7 @@ resource "aws_iam_role_policy_attachment" "execution" {
 }
 resource "aws_iam_role_policy" "secrets" {
   role   = aws_iam_role.execution.id
-  policy = jsonencode({ Version = "2012-10-17", Statement = [{ Effect = "Allow", Action = ["secretsmanager:GetSecretValue"], Resource = concat([aws_db_instance.main.master_user_secret[0].secret_arn], var.llm_secret_arn == "" ? [] : [var.llm_secret_arn]) }] })
+  policy = jsonencode({ Version = "2012-10-17", Statement = [{ Effect = "Allow", Action = ["secretsmanager:GetSecretValue"], Resource = concat([aws_db_instance.main.master_user_secret[0].secret_arn], compact([var.llm_secret_arn, var.stripe_secret_arn, var.stripe_webhook_secret_arn, var.smtp_password_secret_arn, var.turnstile_secret_arn])) }] })
 }
 resource "aws_iam_role" "task" {
   name               = "${local.name}-task"

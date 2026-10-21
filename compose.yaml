@@ -34,10 +34,29 @@ services:
     init: true
     ports:
       - "127.0.0.1:8010:8000"
-    environment:
+    environment: &app-environment
       DATABASE_URL: postgresql+psycopg://supportops:local-demo-only@db:5432/supportops
       ORDERS_API_URL: http://orders:8000
-      MODEL_PROVIDER: ${MODEL_PROVIDER:-baseline}
+      MODEL_PROVIDER: ${MODEL_PROVIDER:-openai}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-openai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      AGENT_MODEL: ${AGENT_MODEL:-gpt-5.4-mini}
+      VERIFIER_MODEL: ${VERIFIER_MODEL:-gpt-5.4-mini}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-large}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://127.0.0.1:8010}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_STARTER_PRICE_ID: ${STRIPE_STARTER_PRICE_ID:-}
+      STRIPE_GROWTH_PRICE_ID: ${STRIPE_GROWTH_PRICE_ID:-}
+      STRIPE_SCALE_PRICE_ID: ${STRIPE_SCALE_PRICE_ID:-}
+      TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
       LLM_MODEL: ${LLM_MODEL:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
@@ -50,6 +69,17 @@ services:
         condition: service_completed_successfully
       orders:
         condition: service_healthy
+    restart: unless-stopped
+  indexer:
+    build: .
+    init: true
+    command: ["python", "-m", "scripts.index_worker"]
+    environment: *app-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      disable: true
     restart: unless-stopped
 volumes:
   postgres:

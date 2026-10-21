@@ -8,5 +8,10 @@ desired_count                = 0
 db_engine_version            = "17.6"
 # image_digest = "sha256:..."
 # llm_secret_arn = "arn:aws:secretsmanager:..."
-# llm_model = "your-model-id"
+llm_model = "gpt-5.4-mini"
+embedding_model = "text-embedding-3-large"
+public_base_url = "https://REPLACE-WITH-YOUR-DOMAIN.example"
 # alarm_email = "you@example.com"
+
+# Configure Stripe/SMTP/Turnstile secret ARNs and reviewed policy URLs before paid launch.
+# Never put raw secrets in tfvars or Terraform state.

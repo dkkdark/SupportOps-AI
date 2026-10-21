@@ -56,7 +56,7 @@ variable "llm_base_url" {
 }
 variable "llm_model" {
   type    = string
-  default = ""
+  default = "gpt-5.4-mini"
 }
 variable "otel_image" {
   type        = string
@@ -67,4 +67,98 @@ variable "alarm_email" {
   type        = string
   default     = ""
   description = "Optional alarm recipient; SNS requires recipient confirmation."
+}
+
+variable "public_base_url" {
+  type    = string
+  default = "https://REPLACE-WITH-YOUR-DOMAIN.example"
+}
+
+variable "embedding_model" {
+  type    = string
+  default = "text-embedding-3-large"
+}
+
+variable "stripe_secret_arn" {
+  type    = string
+  default = ""
+}
+
+variable "stripe_webhook_secret_arn" {
+  type    = string
+  default = ""
+}
+
+variable "stripe_starter_price_id" {
+  type    = string
+  default = ""
+}
+
+variable "stripe_growth_price_id" {
+  type    = string
+  default = ""
+}
+
+variable "stripe_scale_price_id" {
+  type    = string
+  default = ""
+}
+
+variable "smtp_host" {
+  type    = string
+  default = ""
+}
+
+variable "smtp_user" {
+  type    = string
+  default = ""
+}
+
+variable "smtp_from" {
+  type    = string
+  default = ""
+}
+
+variable "smtp_password_secret_arn" {
+  type    = string
+  default = ""
+}
+
+variable "turnstile_site_key" {
+  type    = string
+  default = ""
+}
+
+variable "turnstile_secret_arn" {
+  type    = string
+  default = ""
+}
+
+variable "legal_business_name" {
+  type    = string
+  default = ""
+}
+
+variable "legal_contact_email" {
+  type    = string
+  default = ""
+}
+
+variable "legal_terms_url" {
+  type    = string
+  default = ""
+}
+
+variable "legal_privacy_url" {
+  type    = string
+  default = ""
+}
+
+variable "legal_documents_approved" {
+  type    = bool
+  default = false
+}
+variable "stripe_automatic_tax" {
+  type    = bool
+  default = false
 }

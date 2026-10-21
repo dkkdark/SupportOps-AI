@@ -49,6 +49,9 @@ jobs:
       - name: Validate Compose contract and build image
         run: docker compose config --quiet && docker build -t supportops:ci .
       - name: Container smoke test
+        env:
+          MODEL_PROVIDER: baseline
+          EMBEDDING_PROVIDER: baseline
         run: |
           docker compose up -d --wait
           python -m scripts.smoke --url http://127.0.0.1:8010

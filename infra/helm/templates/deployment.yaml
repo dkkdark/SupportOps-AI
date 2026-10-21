@@ -61,6 +61,24 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: [ALL]
+        - name: indexer
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: [python, -m, scripts.index_worker]
+          envFrom:
+            - secretRef:
+                name: {{ .Values.existingSecret }}
+          env:
+            - name: APP_ENV
+              value: {{ .Values.appEnv | quote }}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+        {{- if .Values.includeDemoOrders }}
         - name: orders
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
@@ -75,3 +93,5 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: [ALL]
+
+        {{- end }}

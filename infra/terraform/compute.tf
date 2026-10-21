@@ -14,8 +14,41 @@ resource "aws_ecs_cluster" "main" {
   }
 }
 locals {
-  app_image  = var.image_digest == "" ? "${aws_ecr_repository.app.repository_url}:bootstrap" : "${aws_ecr_repository.app.repository_url}@${var.image_digest}"
-  log_config = { logDriver = "awslogs", options = { awslogs-group = aws_cloudwatch_log_group.app.name, awslogs-region = var.region, awslogs-stream-prefix = "ecs" } }
+  app_environment = [
+    { name = "APP_ENV", value = "production" },
+    { name = "FORWARDED_ALLOW_IPS", value = aws_vpc.main.cidr_block },
+    { name = "ALLOW_DEMO_SIGNUP", value = "false" },
+    { name = "SESSION_DAYS", value = "7" },
+    { name = "DB_HOST", value = aws_db_instance.main.address },
+    { name = "DB_USER", value = "supportops" },
+    { name = "DB_NAME", value = "supportops" },
+    { name = "ORDERS_API_URL", value = "http://127.0.0.1:8001" },
+    { name = "MODEL_PROVIDER", value = "openai" },
+    { name = "OPENAI_BASE_URL", value = var.llm_base_url },
+    { name = "AGENT_MODEL", value = var.llm_model },
+    { name = "VERIFIER_MODEL", value = var.llm_model },
+    { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = var.otel_image == "" ? "" : "http://127.0.0.1:4318" },
+    { name = "EMBEDDING_PROVIDER", value = "openai" },
+    { name = "EMBEDDING_MODEL", value = var.embedding_model },
+    { name = "PUBLIC_BASE_URL", value = var.public_base_url },
+    { name = "STRIPE_STARTER_PRICE_ID", value = var.stripe_starter_price_id },
+    { name = "STRIPE_GROWTH_PRICE_ID", value = var.stripe_growth_price_id },
+    { name = "STRIPE_SCALE_PRICE_ID", value = var.stripe_scale_price_id },
+    { name = "SMTP_HOST", value = var.smtp_host },
+    { name = "SMTP_USER", value = var.smtp_user },
+    { name = "SMTP_FROM", value = var.smtp_from },
+    { name = "TURNSTILE_SITE_KEY", value = var.turnstile_site_key },
+    { name = "LEGAL_BUSINESS_NAME", value = var.legal_business_name },
+    { name = "LEGAL_CONTACT_EMAIL", value = var.legal_contact_email },
+    { name = "LEGAL_TERMS_URL", value = var.legal_terms_url },
+    { name = "LEGAL_PRIVACY_URL", value = var.legal_privacy_url },
+    { name = "LEGAL_DOCUMENTS_APPROVED", value = tostring(var.legal_documents_approved) },
+    { name = "STRIPE_AUTOMATIC_TAX", value = tostring(var.stripe_automatic_tax) },
+    { name = "CODE_VERSION", value = var.image_digest }
+  ]
+  app_secrets = concat([{ name = "DB_PASSWORD", valueFrom = "${aws_db_instance.main.master_user_secret[0].secret_arn}:password::" }], var.llm_secret_arn == "" ? [] : [{ name = "OPENAI_API_KEY", valueFrom = var.llm_secret_arn }], var.stripe_secret_arn == "" ? [] : [{ name = "STRIPE_SECRET_KEY", valueFrom = var.stripe_secret_arn }], var.stripe_webhook_secret_arn == "" ? [] : [{ name = "STRIPE_WEBHOOK_SECRET", valueFrom = var.stripe_webhook_secret_arn }], var.smtp_password_secret_arn == "" ? [] : [{ name = "SMTP_PASSWORD", valueFrom = var.smtp_password_secret_arn }], var.turnstile_secret_arn == "" ? [] : [{ name = "TURNSTILE_SECRET_KEY", valueFrom = var.turnstile_secret_arn }])
+  app_image   = var.image_digest == "" ? "${aws_ecr_repository.app.repository_url}:bootstrap" : "${aws_ecr_repository.app.repository_url}@${var.image_digest}"
+  log_config  = { logDriver = "awslogs", options = { awslogs-group = aws_cloudwatch_log_group.app.name, awslogs-region = var.region, awslogs-stream-prefix = "ecs" } }
   collector_config = yamlencode({
     receivers  = { otlp = { protocols = { http = { endpoint = "0.0.0.0:4318" } } } }
     processors = { batch = {} }
@@ -43,37 +76,23 @@ resource "aws_ecs_task_definition" "app" {
   }
   container_definitions = jsonencode(concat([
     {
-      name         = "app", image = local.app_image, essential = true,
-      portMappings = [{ containerPort = 8000, protocol = "tcp" }],
-      environment = [
-        { name = "APP_ENV", value = "production" },
-        { name = "FORWARDED_ALLOW_IPS", value = aws_vpc.main.cidr_block },
-        { name = "ALLOW_DEMO_SIGNUP", value = "false" },
-        { name = "SESSION_DAYS", value = "7" },
-        { name = "DB_HOST", value = aws_db_instance.main.address },
-        { name = "DB_USER", value = "supportops" },
-        { name = "DB_NAME", value = "supportops" },
-        { name = "ORDERS_API_URL", value = "http://127.0.0.1:8001" },
-        { name = "MODEL_PROVIDER", value = var.llm_secret_arn == "" ? "baseline" : "openai_compatible" },
-        { name = "LLM_BASE_URL", value = var.llm_base_url },
-        { name = "LLM_MODEL", value = var.llm_model },
-        { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = var.otel_image == "" ? "" : "http://127.0.0.1:4318" },
-        { name = "CODE_VERSION", value = var.image_digest }
-      ],
-      secrets = concat([
-        { name = "DB_PASSWORD", valueFrom = "${aws_db_instance.main.master_user_secret[0].secret_arn}:password::" }
-      ], var.llm_secret_arn == "" ? [] : [{ name = "LLM_API_KEY", valueFrom = var.llm_secret_arn }]),
+      name             = "app", image = local.app_image, essential = true,
+      portMappings     = [{ containerPort = 8000, protocol = "tcp" }],
+      environment      = local.app_environment,
+      secrets          = local.app_secrets,
       logConfiguration = local.log_config,
       healthCheck      = { command = ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=2)\""], interval = 30, timeout = 5, retries = 3, startPeriod = 45 },
-      dependsOn        = [{ containerName = "orders", condition = "HEALTHY" }],
       linuxParameters  = { initProcessEnabled = true }
     },
     {
-      name             = "orders", image = local.app_image, essential = true,
-      command          = ["uvicorn", "supportops.orders_api:app", "--host", "0.0.0.0", "--port", "8001"],
+      name             = "indexer", image = local.app_image, essential = true,
+      command          = ["python", "-m", "scripts.index_worker"],
+      environment      = local.app_environment,
+      secrets          = local.app_secrets,
       logConfiguration = local.log_config,
-      healthCheck      = { command = ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health/live', timeout=2)\""], interval = 10, timeout = 3, retries = 3, startPeriod = 10 }
-    }
+      dependsOn        = [{ containerName = "app", condition = "HEALTHY" }],
+      linuxParameters  = { initProcessEnabled = true }
+    },
     ], var.otel_image == "" ? [] : [{
       name    = "otel", image = var.otel_image, essential = false,
       command = ["--config=env:OTEL_CONFIG"], environment = [{ name = "OTEL_CONFIG", value = local.collector_config }], logConfiguration = local.log_config

@@ -1,3 +1,4 @@
+includeDemoOrders: false
 appEnv: production
 replicaCount: 1
 image:

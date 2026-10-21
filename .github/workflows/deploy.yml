@@ -6,6 +6,10 @@ on:
         type: boolean
         default: false
         description: Run bounded live-model evaluation using configured LLM secrets
+      bootstrap:
+        type: boolean
+        default: false
+        description: First deployment only — health checks before a verified smoke account exists
 permissions:
   contents: read
   id-token: write
@@ -35,11 +39,12 @@ jobs:
         run: pytest && python -m eval.run --split holdout
       - name: Bounded live-model benchmark
         if: inputs.live_benchmark
-        run: python -m eval.run --split holdout --live --output reports/live.json
+        run: python -m scripts.live_acceptance
         env:
-          LLM_MODEL: ${{ vars.LLM_MODEL }}
-          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
-          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AGENT_MODEL: ${{ vars.AGENT_MODEL || 'gpt-5.4-mini' }}
+          VERIFIER_MODEL: ${{ vars.VERIFIER_MODEL || 'gpt-5.4-mini' }}
+          OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL || 'https://api.openai.com/v1' }}
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
@@ -64,7 +69,17 @@ jobs:
         id: rollout
         run: python -m scripts.ecs_deploy rollout
       - name: Smoke test deployed application
-        run: python -m scripts.smoke --url "$APP_URL"
+        env:
+          SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+          BOOTSTRAP: ${{ inputs.bootstrap }}
+        run: |
+          if [ "$BOOTSTRAP" = "true" ]; then
+            python -m scripts.smoke --url "$APP_URL" --health-only
+          else
+            test -n "$SMOKE_EMAIL" && test -n "$SMOKE_PASSWORD"
+            python -m scripts.smoke --url "$APP_URL"
+          fi
       - name: Preserve release evidence
         env:
           ARTIFACTS_BUCKET: ${{ vars.ARTIFACTS_BUCKET }}
