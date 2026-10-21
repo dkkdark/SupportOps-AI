@@ -28,7 +28,11 @@ The agent produces typed answer blocks and evidence IDs. Every factual block mus
 
 LangGraph persists a human-review interrupt under `organization:request:revision`. SQL compare-and-swap prevents duplicate analysis and stale decisions. Processing leases cover the configured agent timeout plus recovery margin. Approval resumes the exact saved checkpoint and records the signed-in employee, final text and decision. Copied source/template versions and a model/prompt manifest remain with the result. Approval records a decision; no reply is sent automatically.
 
-## Paid usage and billing
+## Current demo allowance
+
+The default release is demo. Payment endpoints are disabled and public plans return an empty list. `demo_accounts` records a lifetime $5 allowance per user across companies, costs/reservations in integer microusd, the limit timestamp and launch-email requested/sent markers. Reservations are atomic and bind both workspace membership and initiating user; background index jobs retain their initiator. Actual configured token cost settles without credit-unit rounding, and unknown charges retain their reserves. Only paid AI operations are limited; old plan caps do not apply to manual workspace features. Exhaustion automatically marks the account for a future launch email; explicit notification signup is also available. No launch mail is automatically sent. Migration 004 conservatively attributes prior company-level spend to its owner. Historical attribution to individual employees was unavailable in earlier releases.
+
+## Future paid usage and billing (disabled in demo)
 
 Trial lasts 14 days with 100 one-time credits. Starter/Growth/Scale use verified Stripe subscription periods and quotas defined in `billing.py`. Token accounting includes indexing, retrieval queries, agent turns and verifier calls. One credit covers up to $0.005 of configured provider cost; charges round up per reservation. An atomic reservation prevents concurrent overspend, limits provider calls and refunds unused credits after settlement. Unknown provider charges retain their reserve and are flagged for operator reconciliation. Process crashes can also leave an unsettled reservation; never refund before checking provider usage. There are no automatic overage charges.
 

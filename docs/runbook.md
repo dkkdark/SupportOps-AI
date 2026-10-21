@@ -98,7 +98,13 @@ Invitation links are single-use, email-bound and expire after 7 days. Revoke/rec
 Migration 002 is a forward-only schema conversion. Previous single-business records are retained under `legacy-demo` with no members, not assigned to the next registrant. The pre-conversion local backup lives under `var/backups/before-saas-20261021-163754/`. To restore it, stop the app and restore both application/checkpoint files together with the pre-conversion code. Do not downgrade by dropping tenant keys or roll back just the application image across this boundary. Keep production migration/restore credentials separate from ordinary employees.
 
 
-## 8. Indexing, credit reservations and payment lifecycle
+## 8. Demo budgets and pending launch email
+
+The default demo limit is $5 per user account, including all its workspaces. Read `demo_accounts` and the user-linked `credit_reservations`. A balance cannot reset through a new company or period. A 429 on exhausted AI allowance leaves manual requests and stored knowledge available. Pending indexing can fail with `demo_budget_exhausted`; do not repeatedly retry it until an operator has reviewed the allowance.
+
+At the limit, the account records `limit_reached_at`, `launch_email_requested_at`, reason `demo_budget_exhausted`, and an empty `launch_email_sent_at`. The operator CLI `python -m scripts.demo_waitlist --output var/launch-notifications.csv` exports only verified pending recipients, without sending emails. Never mark a launch notification sent before actual sending. Prior company-level model costs are attributed to the owner by migration 004. Keep backups before migration and maintain an operator audit for any manual reconciliation. No automatic launch mailing is configured.
+
+## 9. Indexing, credit reservations and future payment lifecycle
 
 For pending knowledge, inspect `IndexJob` status, model profile, attempts and sanitized error. Ensure `python -m scripts.index_worker` is running with the same database and model configuration as the API. It retries pending/failed jobs up to three attempts and reclaims stale indexing leases. Correct configuration before selecting retry in Knowledge. A changed embedding model requires a new index profile; old vectors are not reused for a different profile.
 

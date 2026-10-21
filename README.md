@@ -20,7 +20,7 @@ python -m scripts.dev
 
 Open [the platform](http://127.0.0.1:8010) or [the product overview](http://127.0.0.1:8010/#home). API docs: [OpenAPI](http://127.0.0.1:8010/docs). Original local databases were backed up before migrations under ignored `var/backups/`. No secrets belong in Git.
 
-The full setup guide and remaining founder actions are in [launch checklist — Russian](docs/launch-checklist.ru.md). Pricing and cost assumptions are in [unit economics](docs/unit-economics.md).
+The full setup guide and remaining founder actions are in [launch checklist — Russian](docs/launch-checklist.ru.md). The current demo API setup is in [API connection steps — Russian](docs/api-setup.ru.md). Future pricing assumptions remain in [unit economics](docs/unit-economics.md).
 
 ## Real agent and RAG
 
@@ -55,28 +55,29 @@ Production public forms require configured Turnstile protection. Production sign
 
 ## Workspace setup
 
-1. Register your business; you become its owner and start a 14-day trial.
+1. Register your business; you become its owner. Each account has a one-time $5 AI demo allowance across all workspaces.
 2. Create **Request types**, such as vendor inquiry, travel expenses or IT access. Add instructions for investigation. Mark a type public only when it may appear on a form.
 3. Upload documents in **Knowledge base**. Wait for **Semantic index ready**; retry failed indexing from the source dialog. Publish a new version instead of changing an existing rule in place.
 4. Customize **Reply templates**. Include `{{facts}}` exactly once; optional variables include requester name (`{{customer_name}}`), business, agent, subject and request ID.
 5. Invite employees through single-use, email-bound links. Owners manage admins and agents; admins manage agents; agents investigate and review requests.
 6. Connect a source or create an internal request. Run the agent, inspect its sources/tool record, edit the draft, then approve or escalate.
-7. Review **Plan & usage**. An owner chooses a paid plan through Stripe when the operator has configured payments.
+7. Review **AI usage**. Purchasing is coming soon; request a launch email or continue manual work after the AI allowance is used.
 
-## Subscriptions and cost control
+## Demo release and cost control
 
-| Plan | Monthly USD / workspace | Included AI credits | Seats | Requests / period | Stored knowledge chunks |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Trial | $0 for 14 days | 100 one-time | 3 | 300 | 300 |
-| Starter | $49 | 1,000 | 5 | 10,000 | 1,000 |
-| Growth | $149 | 5,000 | 20 | 50,000 | 5,000 |
-| Scale | $399 | 15,000 | 50 | 100,000 | 15,000 |
+`DEMO_RELEASE=true` is the default. Prices and paid plans are hidden. Checkout, Customer Portal and payment webhooks are disabled even if Stripe keys exist. Previous subscription entitlements do not bypass the demo budget.
 
-Credits cover agent input/output tokens, query embeddings, verification and document indexing. Charges are rounded up from recorded provider cost using an internal $0.005 cost unit. A run reserves up to 90 available credits; unused reservation is released after known usage is recorded. The default provider cost budget is $0.40 per run. Long investigations can stop at this budget. Unknown provider charges retain their reservation until operator reconciliation.
+Each user account has a one-time **$5 AI usage allowance**, shared across all its businesses, with no monthly reset or 14-day expiry. Paid agent calls, query embeddings, verification and document indexing are attributed to the initiating user. The server atomically reserves estimated dollars before calling a model, then settles usage to millionths of a dollar. Known unused reserves are released; unknown provider charges stay conservatively accounted until reconciliation. The per-run provider limit remains $0.40. Update token prices if models change.
 
-No automatic overage charges or top-ups exist. AI and indexing pause when credits are exhausted; reading and manual review remain available. Trial credits are one-time, and paid usage resets from the verified subscription billing period. Credit quantities are **not a fixed number of replies**. Update configured token rates when changing models or provider prices.
+At the limit, further paid calls pause. Creating/reading/reviewing requests, inviting colleagues, editing templates and saving knowledge remain available. Knowledge can be stored while its paid index waits. Former plan-based seat/request/storage caps do not apply in the demo; security throttles and upload size limits remain.
 
-Checkout verifies the server-side Stripe price against the published monthly USD plan. Only a signed, replay-checked webhook activates a paid entitlement; the return URL never proves payment. Subscription updates, cancellation and payment failures update access. Owners manage an existing subscription through Stripe Customer Portal. Stripe, SMTP, spam-protection keys and reviewed operator policies still need real account configuration before public sales. No live Stripe payment has been taken.
+The exhausted account is marked in `demo_accounts` with its user ID, limit timestamp, notification request, reason and pending email state. Users can also choose **Email me at launch** earlier. A local operator command exports verified, pending recipients without sending anything:
+
+```bash
+python -m scripts.demo_waitlist --output var/launch-notifications.csv
+```
+
+A future launch mailing requires a configured provider, reviewed content and actual sending; `launch_email_sent_at` must only be recorded after delivery handling. See [API setup](docs/api-setup.ru.md). Earlier company-level model spending is conservatively migrated to the owner’s demo balance in migration 004. Future subscription code is retained behind the disabled release mode; changing that mode is a separate product launch.
 
 ## Verification
 
@@ -106,9 +107,9 @@ The current machine’s Docker daemon is unavailable; local PostgreSQL/container
 - Production smoke uses a pre-verified account through `SMOKE_EMAIL` / `SMOKE_PASSWORD`; it never bypasses email verification.
 - Owner JSON export includes business records without passwords, session cookies, invitation hashes or API credentials.
 - Verification/recovery links are expiring, single-use and hashed; password reset revokes existing sessions.
-- Operator policy drafts are available at `/terms` and `/privacy`. Production checkout requires operator details and reviewed HTTPS policy URLs. Configuration checks in Settings do not prove legal suitability or deployment success.
+- Operator policy drafts are available at `/terms` and `/privacy`. Future production checkout requires operator details and reviewed HTTPS policy URLs; demo checkout is disabled. Configuration checks in Settings do not prove legal suitability or deployment success.
 
-Migrations `002` and `003` preserve existing records. Back up both application/checkpoint data before upgrades. `002` is forward-only; returning to the former single-business binary requires its matching database/code backup.
+Migrations `002`–`004` preserve existing records and prior model usage. Back up both application/checkpoint data before upgrades. `002` is forward-only; returning to the former single-business binary requires its matching database/code backup.
 
 Repository remote: [dkkdark/SupportOps-AI](https://github.com/dkkdark/SupportOps-AI). Work remains in local feature commits. **No push, publication or cloud apply has been performed.**
 

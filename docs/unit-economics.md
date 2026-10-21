@@ -1,5 +1,7 @@
 # Subscription unit economics
 
+> Future paid-launch planning only. The current demo hides pricing and disables payments, with a one-time $5 AI allowance per user account. See [current API setup](api-setup.ru.md).
+
 The published plans charge per business workspace. They include bounded AI usage rather than unlimited model calls. Prices/limits are implemented in `supportops/billing.py`; plan IDs and payment amounts are validated server-side.
 
 | Plan | Revenue / month | AI credits | Maximum configured direct model-cost allowance | Revenue remaining before other costs |
