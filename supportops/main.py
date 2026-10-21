@@ -272,6 +272,8 @@ def create_app(
 
     @app.get("/api/config")
     def public_config():
+        from supportops.mailer import email_status
+
         return {
             "mode": "api",
             "demo_release": config.demo_release,
@@ -286,7 +288,8 @@ def create_app(
             "captcha_site_key": config.turnstile_site_key
             if config.require_signup_captcha
             else "",
-            "email_delivery_enabled": bool(config.smtp_host and config.smtp_from),
+            "email_delivery_enabled": email_status(config)["ready"],
+            "support_email": config.support_email,
             "ai_configured": bool(config.openai_api_key or config.llm_api_key),
             "embedding_provider": config.embedding_provider,
             "version": "0.3.0",

@@ -6,6 +6,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import select
 from supportops.auth import Identity
+from supportops.mailer import email_status
 from supportops.db import (
     KnowledgeSource,
     RequestType,
@@ -33,6 +34,7 @@ def launch_router(auth, sessions, config):
 
     @router.get("/api/launch-status")
     def launch_status(actor: Identity = Depends(auth.admin)):
+        mail = email_status(config)
         return {
             "checks": [
                 {
@@ -52,8 +54,10 @@ def launch_router(auth, sessions, config):
                 },
                 {
                     "name": "Email verification and recovery",
-                    "ready": bool(config.smtp_host and config.smtp_from),
-                    "action": "Configure SMTP and test verification/password recovery with your own mailbox.",
+                    "ready": mail["ready"],
+                    "action": "Configure SMTP: " + ", ".join(mail["missing"])
+                    if mail["missing"]
+                    else "SMTP settings are complete. Verify delivery with your own mailbox.",
                 },
                 *(
                     []
@@ -87,6 +91,10 @@ def launch_router(auth, sessions, config):
             ],
             "note": "Configuration checks do not prove cloud deployment, valid credentials, email delivery, legal suitability or successful payment processing. Complete the launch acceptance steps.",
         }
+
+    @router.get("/api/email/status")
+    def mail_status(actor: Identity = Depends(auth.admin)):
+        return email_status(config)
 
     @router.get("/api/workspace/export")
     def export(actor: Identity = Depends(auth.admin)):
@@ -138,7 +146,7 @@ def launch_router(auth, sessions, config):
                 status_code=307,
             )
         operator = config.legal_business_name or "[Service operator — to be completed]"
-        contact = config.legal_contact_email or "[Contact email — to be completed]"
+        contact = config.legal_contact_email or config.support_email
         title = "Privacy notice" if kind == "privacy" else "Service terms"
         paragraphs = (
             [

@@ -50,12 +50,17 @@ class Settings(BaseSettings):
     legal_documents_approved: bool = False
     stripe_automatic_tax: bool = False
     require_verified_email: bool = True
+    support_email: str = Field(
+        default="info.xenonimus@gmail.com", pattern=r"^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$"
+    )
     smtp_host: str = ""
-    smtp_port: int = 587
+    smtp_port: int = Field(default=587, ge=1, le=65535)
     smtp_user: str = ""
     smtp_password: str = ""
     smtp_from: str = ""
     smtp_starttls: bool = True
+    smtp_ssl: bool = False
+    smtp_timeout_seconds: float = Field(default=10, ge=1, le=30)
     llm_base_url: str = "https://api.openai.com/v1"
     llm_model: str = ""
     llm_api_key: str = ""

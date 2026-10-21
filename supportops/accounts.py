@@ -1,54 +1,27 @@
 """Email verification and single-use account recovery. Delivery is configured by the operator."""
 
 from datetime import timedelta
-from email.message import EmailMessage
 import secrets
-import smtplib
-import ssl
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import select, update, delete
 from supportops.auth import PASSWORDS, Identity, digest
 from supportops.db import RecoveryToken, LoginSession, User, utcnow
-
-
-def deliver(config, to, subject, body):
-    if not config.smtp_host or not config.smtp_from:
-        return False
-    msg = EmailMessage()
-    msg["From"] = config.smtp_from
-    msg["To"] = to
-    msg["Subject"] = subject
-    msg.set_content(body)
-    try:
-        with smtplib.SMTP(config.smtp_host, config.smtp_port, timeout=10) as smtp:
-            if config.smtp_starttls:
-                smtp.starttls(context=ssl.create_default_context())
-            if config.smtp_user:
-                smtp.login(config.smtp_user, config.smtp_password)
-            smtp.send_message(msg)
-        return True
-    except (OSError, smtplib.SMTPException):
-        return False
+from supportops.mailer import deliver, email_status
 
 
 def send_token(config, sessions, user_id, purpose):
-    if not config.smtp_host:
-        return
+    if purpose not in ("verify", "reset"):
+        raise ValueError("Unknown account email purpose")
+    if not email_status(config)["ready"]:
+        return False
     token = secrets.token_urlsafe(32)
     with sessions() as db:
         user = db.get(User, user_id)
-        if not user:
-            return
-        db.execute(
-            update(RecoveryToken)
-            .where(
-                RecoveryToken.user_id == user.id,
-                RecoveryToken.purpose == purpose,
-                RecoveryToken.used.is_(False),
-            )
-            .values(used=True)
-        )
+        if not user or (purpose == "verify" and user.email_verified):
+            return False
+        # Earlier links stay usable if a resend fails or SMTP delivery is ambiguous.
+        # Redeeming one link revokes all other links for the same user/purpose.
         db.add(
             RecoveryToken(
                 token_hash=digest(token),
@@ -66,7 +39,7 @@ def send_token(config, sessions, user_id, purpose):
         + ("/#verify/" if purpose == "verify" else "/#reset/")
         + token
     )
-    deliver(
+    return deliver(
         config,
         email,
         "Verify your SupportOps email"
@@ -118,6 +91,9 @@ def accounts_router(auth, sessions, config):
             token = db.get(RecoveryToken, digest(body.token))
             if not token or token.purpose != "reset":
                 raise HTTPException(410, "This recovery link is invalid or expired.")
+            user = db.scalar(
+                select(User).where(User.id == token.user_id).with_for_update()
+            )
             claimed = db.execute(
                 update(RecoveryToken)
                 .execution_options(synchronize_session=False)
@@ -130,7 +106,13 @@ def accounts_router(auth, sessions, config):
             ).rowcount
             if not claimed:
                 raise HTTPException(410, "This recovery link is invalid or expired.")
-            user = db.get(User, token.user_id)
+            db.execute(
+                update(RecoveryToken)
+                .where(
+                    RecoveryToken.user_id == user.id, RecoveryToken.purpose == "reset"
+                )
+                .values(used=True)
+            )
             user.password_hash = PASSWORDS.hash(body.password)
             db.execute(delete(LoginSession).where(LoginSession.user_id == user.id))
             db.commit()
@@ -155,6 +137,9 @@ def accounts_router(auth, sessions, config):
                 raise HTTPException(
                     410, "This verification link is invalid or expired."
                 )
+            user = db.scalar(
+                select(User).where(User.id == token.user_id).with_for_update()
+            )
             claimed = db.execute(
                 update(RecoveryToken)
                 .execution_options(synchronize_session=False)
@@ -169,7 +154,14 @@ def accounts_router(auth, sessions, config):
                 raise HTTPException(
                     410, "This verification link is invalid or expired."
                 )
-            db.get(User, token.user_id).email_verified = True
+            db.execute(
+                update(RecoveryToken)
+                .where(
+                    RecoveryToken.user_id == user.id, RecoveryToken.purpose == "verify"
+                )
+                .values(used=True)
+            )
+            user.email_verified = True
             db.commit()
         return {
             "message": "Email verified. You can use AI processing and connect request sources."

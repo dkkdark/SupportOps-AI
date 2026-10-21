@@ -19,12 +19,16 @@ def offline_defaults(monkeypatch):
     for key in (
         "SMTP_HOST",
         "SMTP_FROM",
+        "SMTP_USER",
+        "SMTP_PASSWORD",
         "STRIPE_SECRET_KEY",
         "STRIPE_WEBHOOK_SECRET",
         "TURNSTILE_SITE_KEY",
         "TURNSTILE_SECRET_KEY",
     ):
         monkeypatch.setenv(key, "")
+    monkeypatch.setenv("SMTP_SSL", "false")
+    monkeypatch.setenv("SMTP_STARTTLS", "true")
 
 
 @pytest.fixture
