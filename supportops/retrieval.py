@@ -3,7 +3,6 @@
 import hashlib
 import math
 import re
-from collections import Counter
 from datetime import date
 from sqlalchemy import select, cast
 from pgvector.sqlalchemy import Vector

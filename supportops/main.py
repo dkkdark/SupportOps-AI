@@ -7,7 +7,7 @@ from contextlib import ExitStack, asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlparse
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -24,6 +24,7 @@ from supportops.intake import (
 )
 from supportops.launch import launch_router
 from supportops.accounts import accounts_router
+from supportops.operations import operations_router
 from supportops.agent import build_agent_graph
 from supportops.auth import Auth, Identity, audit
 from supportops.config import Settings, settings
@@ -32,14 +33,13 @@ from supportops.db import (
     CreditReservation,
     Document,
     KnowledgeSource,
-    Organization,
     ReplyTemplate,
     Review,
     Ticket,
     make_database,
     utcnow,
 )
-from supportops.migration import migrate
+from supportops.migration import migrate, verify_schema
 from supportops.retrieval import embed
 from supportops.schemas import AnalyzeInput, ReviewInput, Rule, TicketInput
 from supportops.telemetry import configure
@@ -150,6 +150,7 @@ def create_app(
     async def lifespan(app):
         if config.app_env != "production":
             migrate(engine)
+        verify_schema(engine)
         configure(config)
         with ExitStack() as stack:
             if config.database_url.startswith("postgresql"):
@@ -170,7 +171,6 @@ def create_app(
                         str(engine.url.database) + ".checkpoints"
                     )
                 )
-            cp.setup()
             app.state.graph = build_graph(
                 config, sessions, cp, orders_transport, llm_transport
             )
@@ -246,6 +246,7 @@ def create_app(
 
     app.include_router(auth.router(seed_demo))
     app.include_router(accounts_router(auth, sessions, config))
+    app.include_router(operations_router(auth, sessions, config))
     app.include_router(content_router(auth, sessions))
     app.include_router(billing_router(auth, sessions, config, billing_transport))
     app.include_router(intake_router(auth, sessions, config, WEB))
@@ -261,11 +262,24 @@ def create_app(
     def live():
         return {"status": "ok"}
 
+    @app.get("/health/worker")
+    def worker_health():
+        from supportops.operations import worker_status
+
+        with sessions() as db:
+            result = worker_status(db)
+        if not result["healthy"]:
+            raise HTTPException(
+                503, "Background worker is not reporting a recent heartbeat."
+            )
+        return {"status": "ok"}
+
     @app.get("/health/ready")
     def ready():
         try:
             with sessions() as db:
                 db.execute(text("SELECT 1"))
+            verify_schema(engine)
             return {"status": "ready", "database": "ok"}
         except Exception:
             raise HTTPException(503, "Database unavailable.")

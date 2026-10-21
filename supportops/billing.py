@@ -431,11 +431,24 @@ def billing_router(auth, sessions, config, transport=None):
 
         with sessions() as db:
             row = account(db, config, actor.user_id)
+            row.launch_email_opt_out = False
             if not row.launch_email_requested_at:
                 row.launch_email_requested_at = utcnow()
                 row.notification_reason = "launch_requested"
             db.commit()
         return {"launch_email_requested": True}
+
+    @router.delete("/demo/launch-notification")
+    def cancel_launch_notification(actor: Identity = Depends(auth.current)):
+        from supportops.demo_budget import account
+
+        with sessions() as db:
+            row = account(db, config, actor.user_id)
+            row.launch_email_opt_out = True
+            row.launch_email_requested_at = None
+            row.notification_reason = None
+            db.commit()
+        return {"launch_email_requested": False}
 
     @router.post("/billing/portal")
     def portal(actor: Identity = Depends(auth.admin)):

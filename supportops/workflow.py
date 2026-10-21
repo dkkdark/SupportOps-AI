@@ -1,19 +1,17 @@
 import hashlib
 import json
 import re
-import time
 from datetime import date, timedelta
 from pathlib import Path
 from typing import TypedDict
 import httpx
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import interrupt
-from opentelemetry import trace
 from pydantic import ValidationError
 from supportops.retrieval import retrieve, serialize_document, EMBEDDING_VERSION
 from supportops.schemas import ModelSelection, Order
 from supportops.telemetry import step
-from supportops.db import Organization, ReplyTemplate
+from supportops.db import ReplyTemplate
 from supportops.content import render_template
 from sqlalchemy import select
 

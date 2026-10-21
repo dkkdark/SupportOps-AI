@@ -2,7 +2,7 @@
 
 from decimal import Decimal, ROUND_CEILING
 from fastapi import HTTPException
-from sqlalchemy import update
+from sqlalchemy import update, case, func
 from supportops.auth import identifier
 from supportops.db import CreditReservation, DemoAccount, Membership, utcnow
 
@@ -12,6 +12,16 @@ DEMO_MESSAGE = (
     "Paid AI processing is paused. Purchasing will be available soon — we'll email you when it launches. "
     "You can still use your workspace and handle requests manually."
 )
+
+
+def limit_message(row):
+    return (
+        DEMO_MESSAGE.replace(
+            "we'll email you when it launches.", "you can check back when it launches."
+        )
+        if row.launch_email_opt_out
+        else DEMO_MESSAGE
+    )
 
 
 def microusd(value):
@@ -49,8 +59,14 @@ def mark_limit(db, user_id):
         )
         .values(
             limit_reached_at=utcnow(),
-            launch_email_requested_at=utcnow(),
-            notification_reason="demo_budget_exhausted",
+            launch_email_requested_at=case(
+                (DemoAccount.launch_email_opt_out.is_(True), None),
+                else_=func.coalesce(DemoAccount.launch_email_requested_at, utcnow()),
+            ),
+            notification_reason=case(
+                (DemoAccount.launch_email_opt_out.is_(True), None),
+                else_="demo_budget_exhausted",
+            ),
         )
     )
 
@@ -73,7 +89,7 @@ def reserve(db, config, org_id, user_id, amount=None):
         db.commit()  # Retain the notification marker even when the HTTP request fails.
         raise HTTPException(
             429,
-            DEMO_MESSAGE
+            limit_message(row)
             if row.spent_microusd >= row.limit_microusd
             else "Your available demo AI budget is reserved by running work. Please wait for it to finish.",
         )
@@ -148,7 +164,8 @@ def state(db, config, user_id):
         / MICRO,
         "limit_reached": row.spent_microusd >= row.limit_microusd,
         "launch_email_requested": bool(row.launch_email_requested_at),
-        "message": DEMO_MESSAGE
+        "launch_email_opt_out": row.launch_email_opt_out,
+        "message": limit_message(row)
         if row.limit_reached_at
         else (
             "SupportOps AI is in demo. Purchasing will be available soon. "

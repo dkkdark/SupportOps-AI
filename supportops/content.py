@@ -306,7 +306,6 @@ async def uploaded_text(file):
 
 def content_router(auth, sessions):
     from supportops.semantic import enqueue, index_source, index_status
-    from supportops.billing import entitlement
 
     config = auth.config
     transport = getattr(auth, "embedding_transport", None)

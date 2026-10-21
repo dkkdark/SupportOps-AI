@@ -27,6 +27,7 @@ def main():
                     User.email_verified.is_(True),
                     DemoAccount.launch_email_requested_at.is_not(None),
                     DemoAccount.launch_email_sent_at.is_(None),
+                    DemoAccount.launch_email_opt_out.is_(False),
                 )
             )
             for user, demo in rows:

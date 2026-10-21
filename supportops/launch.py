@@ -103,7 +103,7 @@ def launch_router(auth, sessions, config):
                 403, "Only the workspace owner can export the business data."
             )
         with sessions() as db:
-            data = {"business": actor.organization, "schema_version": "004"}
+            data = {"business": actor.organization, "schema_version": "005"}
             for cls, label in [
                 (KnowledgeSource, "knowledge"),
                 (RequestType, "request_types"),
