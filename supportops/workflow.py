@@ -48,7 +48,7 @@ def classify(message):
         "cancellation":["отмен", "передум", "отказ"],
         "returns":["вернуть", "возврат", "не подош"],
         "damage":["разбит", "поврежд", "трещин", "брак", "сломан"],
-        "payment":["деньг", "оплат", "спис", "платеж"]
+        "payment":["деньг", "денег", "денеж", "оплат", "спис", "платеж"]
     }
     cats = [cat for cat,tokens in groups.items() if any(t in text for t in tokens)]
     return cats or ["other"]
@@ -202,6 +202,9 @@ def build_graph(settings, sessions, checkpointer, orders_transport=None, llm_tra
             if not all(c["passed"] for c in s["checks"]) and not s.get("reason"):
                 s["reason"] = "validation_failed"
                 s["draft"] = None
+            if s.get("draft"):
+                used_ids = set(s.get("selection",{}).get("fact_ids",[]))
+                s["sources"] = [d for d in s["sources"] if used_ids.intersection(d["facts"])]
             s["manifest"] = {"code":settings.code_version,"prompt":PROMPT_VERSION,"model":settings.llm_model if settings.model_provider!="baseline" else "deterministic-baseline-v1","documents":{d["id"]:d["version"] for d in s.get("sources",[])},"embedding":EMBEDDING_VERSION,"evaluation":"supportops-eval-v1"}
         return s
 

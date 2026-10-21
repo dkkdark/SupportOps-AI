@@ -4,7 +4,8 @@ import math
 import re
 from collections import Counter
 from datetime import date
-from sqlalchemy import select
+from sqlalchemy import select, cast
+from pgvector.sqlalchemy import Vector
 from supportops.db import Document
 
 EMBEDDING_VERSION = "hash-char-ngrams-128-v1"
@@ -34,7 +35,7 @@ def retrieve(session, query: str, categories: list[str], on: date | None = None)
     q = embed(query)
     # PostgreSQL uses pgvector cosine ordering; SQLite mirrors the same distance in Python.
     if session.bind.dialect.name == "postgresql":
-        ordered = session.scalars(select(Document).where(Document.id.in_([d.id for d in docs])).order_by(Document.embedding.comparator.cosine_distance(q))).all()
+        ordered = session.scalars(select(Document).where(Document.id.in_([d.id for d in docs])).order_by(cast(Document.embedding,Vector(128)).cosine_distance(q))).all()
         ranks = {d.id: i for i,d in enumerate(ordered)}
     else:
         ranks = {d.id:i for i,d in enumerate(sorted(docs, key=lambda d: -sum(a*b for a,b in zip(q,d.embedding))))}
