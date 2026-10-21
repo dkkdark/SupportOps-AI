@@ -68,6 +68,7 @@ class LoginInput(Input):
 
 
 class RegisterInput(LoginInput):
+    captcha_token: str = Field(default="", max_length=4096)
     password: Annotated[str, StringConstraints(strip_whitespace=False)] = Field(
         min_length=12, max_length=128
     )
@@ -334,6 +335,13 @@ class Auth:
             tasks: BackgroundTasks,
         ):
             self.throttle(request, "register", limit=10)
+            if (
+                self.config.app_env == "production"
+                and self.config.require_signup_captcha
+            ):
+                from supportops.captcha import verify
+
+                verify(self.config, body.captcha_token, request)
             with self.sessions() as db:
                 if db.scalar(select(User).where(User.email == body.email)):
                     raise HTTPException(

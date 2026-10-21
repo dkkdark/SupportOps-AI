@@ -8,7 +8,7 @@ import ssl
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import select, update, delete
-from supportops.auth import PASSWORDS, Identity, LoginInput, digest
+from supportops.auth import PASSWORDS, Identity, digest
 from supportops.db import RecoveryToken, LoginSession, User, utcnow
 
 

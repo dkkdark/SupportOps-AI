@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "supportops-ai"
-version = "0.2.0"
-description = "Evidence-grounded support workspace with human review and an AI release guard"
+version = "0.3.0"
+description = "Multi-business request platform with tool-using OpenAI agents and semantic RAG"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115,<1", "uvicorn>=0.34,<1", "sqlalchemy>=2.0,<3",

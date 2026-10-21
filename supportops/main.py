@@ -184,7 +184,7 @@ def create_app(
 
     app = FastAPI(
         title="SupportOps AI · Business support platform",
-        version="0.2.0",
+        version="0.3.0",
         lifespan=lifespan,
     )
     app.add_middleware(RequestBodyLimit)
@@ -238,7 +238,7 @@ def create_app(
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'"
         )
-        if request.url.path.startswith("/forms/") and config.turnstile_site_key:
+        if config.turnstile_site_key:
             response.headers["Content-Security-Policy"] = (
                 "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self' https://challenges.cloudflare.com; frame-ancestors 'none'; form-action 'self'"
             )
@@ -281,6 +281,9 @@ def create_app(
             or config.allow_demo_signup,
             "agent_model": config.agent_model,
             "embedding_model": config.embedding_model,
+            "captcha_site_key": config.turnstile_site_key
+            if config.require_signup_captcha
+            else "",
             "email_delivery_enabled": bool(config.smtp_host and config.smtp_from),
             "ai_configured": bool(config.openai_api_key or config.llm_api_key),
             "embedding_provider": config.embedding_provider,

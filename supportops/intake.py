@@ -4,8 +4,6 @@ import hashlib
 import hmac
 import secrets
 import uuid
-from urllib.parse import urlparse
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -350,23 +348,14 @@ def intake_router(auth, sessions, config, web_path):
             if kind == "form" and (
                 config.turnstile_secret_key or config.app_env == "production"
             ):
-                if not config.turnstile_secret_key or not body.captcha_token:
-                    raise HTTPException(422, "Complete the spam-protection check.")
-                try:
-                    response = httpx.post(
-                        "https://challenges.cloudflare.com/turnstile/v0/siteverify",
-                        data={
-                            "secret": config.turnstile_secret_key,
-                            "response": body.captcha_token,
-                            "remoteip": request.client.host,
-                        },
-                        timeout=5,
-                    )
-                    valid = response.is_success and response.json().get("success")
-                except (httpx.HTTPError, ValueError):
-                    valid = False
-                if not valid:
-                    raise HTTPException(422, "Spam-protection check failed. Try again.")
+                from supportops.captcha import verify
+
+                verify(
+                    config,
+                    body.captcha_token,
+                    request,
+                    mandatory=config.app_env == "production",
+                )
             t = (
                 db.get(RequestType, (c.organization_id, c.request_type_id))
                 if c.request_type_id

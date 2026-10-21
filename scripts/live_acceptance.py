@@ -13,6 +13,7 @@ from supportops.main import create_app
 def main():
     logging.disable(logging.CRITICAL)
     cfg = Settings(
+        smtp_host="",
         model_provider="openai",
         embedding_provider="openai",
         agent_max_turns=4,

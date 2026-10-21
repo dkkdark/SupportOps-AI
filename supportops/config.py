@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     public_base_url: str = "http://127.0.0.1:8010"
     turnstile_site_key: str = ""
     turnstile_secret_key: str = ""
+    require_signup_captcha: bool = True
     public_intake_enabled: bool = True
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""

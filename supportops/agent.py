@@ -13,7 +13,6 @@ from supportops.db import Document, ReplyTemplate, RequestType, RequestContext
 from supportops.content import render_template
 from supportops.openai_client import ModelError, OpenAIClient, output_json
 from supportops.semantic import search, profile
-from supportops.retrieval import serialize_document
 from supportops.workflow import State
 from supportops.telemetry import step
 

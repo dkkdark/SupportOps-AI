@@ -4,14 +4,12 @@ import json
 import time
 from datetime import timedelta
 import httpx
-import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
 from supportops.config import Settings
 from supportops.main import create_app
-from supportops.db import RecoveryToken, User, CreditReservation, UsageCounter
+from supportops.db import RecoveryToken
 from supportops.auth import digest
-from tests.test_workspaces import register, account, TICKET, PASSWORD, platform
+from tests.test_workspaces import register, TICKET, PASSWORD
 
 
 def test_public_form_and_api_sources_route_and_deduplicate_requests(platform):

@@ -14,6 +14,15 @@ def offline_defaults(monkeypatch):
     # Never make billable calls from the ordinary test suite.
     monkeypatch.setenv("MODEL_PROVIDER", "baseline")
     monkeypatch.setenv("EMBEDDING_PROVIDER", "baseline")
+    for key in (
+        "SMTP_HOST",
+        "SMTP_FROM",
+        "STRIPE_SECRET_KEY",
+        "STRIPE_WEBHOOK_SECRET",
+        "TURNSTILE_SITE_KEY",
+        "TURNSTILE_SECRET_KEY",
+    ):
+        monkeypatch.setenv(key, "")
 
 
 @pytest.fixture
@@ -77,3 +86,10 @@ def payload():
         "order_id": "1042",
         "channel": "web",
     }
+
+
+@pytest.fixture
+def platform(tmp_path):
+    app = create_app(Settings(database_url=f"sqlite:///{tmp_path}/saas.db"))
+    with TestClient(app) as a, TestClient(app) as b, TestClient(app) as employee:
+        yield a, b, employee

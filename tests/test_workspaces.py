@@ -3,7 +3,6 @@
 from datetime import timedelta
 from io import BytesIO
 from zipfile import ZipFile
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from supportops.config import Settings
@@ -47,13 +46,6 @@ def register(c, name="Acme Services", email="alex@acme.test"):
     )
     assert r.status_code == 201, r.text
     return account(c)
-
-
-@pytest.fixture
-def platform(tmp_path):
-    app = create_app(Settings(database_url=f"sqlite:///{tmp_path}/saas.db"))
-    with TestClient(app) as a, TestClient(app) as b, TestClient(app) as employee:
-        yield a, b, employee
 
 
 def make_ticket(c):
@@ -467,7 +459,11 @@ def test_demo_signup_is_isolated_and_production_disabled(platform, tmp_path):
     migrate(engine)
     engine.dispose()
     with TestClient(
-        create_app(Settings(database_url=url, app_env="production"))
+        create_app(
+            Settings(
+                database_url=url, app_env="production", require_signup_captcha=False
+            )
+        )
     ) as prod:
         assert prod.post("/api/auth/demo").status_code == 404
         r = prod.post(

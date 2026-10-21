@@ -8,7 +8,7 @@ from sqlalchemy import select
 from supportops.config import Settings
 from supportops.main import create_app
 from supportops.db import ChunkEmbedding, CreditReservation, UsageCounter
-from tests.test_workspaces import register, make_ticket, TICKET, POLICY
+from tests.test_workspaces import register, make_ticket, POLICY
 
 
 class Models:
@@ -223,3 +223,23 @@ def test_credit_limit_is_enforced_before_model_calls(ai_client):
     before = len(models.calls)
     r = analyze(c)
     assert r.status_code == 402 and len(models.calls) == before
+
+
+def test_sample_workspaces_cannot_consume_billable_model_calls(ai_client):
+    c, models = ai_client
+    assert c.post("/api/auth/demo").status_code == 201
+    info = c.get("/api/auth/me").json()
+    c.headers.update(
+        {
+            "X-CSRF-Token": info["csrf_token"],
+            "X-Workspace-ID": info["organization"]["id"],
+        }
+    )
+    before = len(models.calls)
+    assert c.post("/api/knowledge", json=POLICY).status_code == 201
+    c.post("/api/tickets/SO-1284/analyze", json={})
+    assert len(models.calls) == before
+    assert (
+        c.post("/api/organizations", json={"name": "A real business"}).status_code
+        == 403
+    )

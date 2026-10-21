@@ -5,14 +5,13 @@ import hmac
 import json
 import math
 import time
-import uuid
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select, update
-from supportops.auth import Identity, aware, audit, identifier
+from supportops.auth import Identity, aware, identifier
 from supportops.db import (
     Organization,
     Subscription,
@@ -184,7 +183,11 @@ def settle(sessions, reservation_id, usage, uncertain=False):
         claimed = db.execute(
             update(CreditReservation)
             .where(CreditReservation.id == r.id, CreditReservation.settled.is_(False))
-            .values(settled=True, charged=actual, usage=usage)
+            .values(
+                settled=True,
+                charged=actual,
+                usage={**usage, "reconciliation_required": uncertain},
+            )
         ).rowcount
         if claimed:
             db.execute(
