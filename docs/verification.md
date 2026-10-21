@@ -1,29 +1,22 @@
 # Local verification record
 
-Verified October 21, 2026, for the business-workspace version. These are local results, not a production deployment.
+Verified October 21, 2026, for v0.3. These are local checks, not a production deployment.
 
-| Check | Result |
+| Check | Evidence |
 | --- | --- |
-| Python / API / workflow suite | 37 passed |
-| Real PostgreSQL/pgvector integration | 1 skipped locally; Docker daemon unavailable; configured in CI |
-| Business isolation | Separate registrations, lists, object access, mutations, retrieval, templates, metrics, workspace headers, idempotency keys and workflow threads checked |
-| Team access | Email-bound, single-use, expiring/revocable invitations; owner/admin/agent permissions; immediate membership revocation checked |
-| Authentication | Argon2/session hashing, sign-in/out, CSRF/origin checks, stale workspace tabs, expiry and throttling checked |
-| Owned documents/templates | Markdown and DOCX import; selectable PDF import through grounded draft; invalid/oversized uploads; atomic template imports; revision conflicts; source versions/archive/snapshots checked |
-| Development evaluation | 80/80 synthetic retail cases passed |
-| Holdout evaluation | 20/20 synthetic retail cases passed; deterministic baseline |
-| Live local HTTP smoke | Registration → isolated business → own policy → grounded reply → source inspection/idempotency → human approval → logout passed |
-| SQLite migration | Fresh 001→002, repeated upgrade, and preserved legacy records/foreign keys checked; actual pre-SaaS backup copy migrated successfully |
-| Browser workflow | Registered Bright Studio; published own policy and brand template; created/analyzed/approved an appointment ticket; generated invitation and joined as James Miller with agent access |
-| Responsive UI | Desktop (1440 px) and mobile (390 px) registration layout inspected; screenshots retained |
-| Frontend | JavaScript syntax and Prettier passed; standalone sample rebuilt |
-| Docker Compose | Configuration validated; image build/runtime not executed locally |
-| Terraform | Format and cached provider-schema validation passed; registry re-init was unavailable; no plan/apply |
-| Helm | Lint and template rendering passed, including local development environment option |
-| External model | Adapter covered by controlled HTTP responses; no real provider calls |
-| AWS / Kubernetes | No deployment |
-| GitHub | Origin configured; feature commits stay local; no push or Actions run |
+| Python/API/workflow suite | 48 passed; 1 real PostgreSQL integration skipped locally because Docker is unavailable |
+| Tenant and account boundaries | Independent companies, memberships, CSRF/origin, stale workspace headers, scoped routing/intake, invitations, verification/reset and revoked sessions covered |
+| Real agent protocol | Controlled Responses/embedding transports cover tool loops, verifier rejection, invalid citations, index recovery, archive filtering, checkpoints and credit gates |
+| Real OpenAI acceptance | `gpt-5.4-mini` agent + verifier, `text-embedding-3-large`, one synthetic policy/request, tool retrieval and human approval passed; sanitized report in `live-model-verification.json` |
+| Cost of this one request | $0.00354394 including query embedding, agent and verifier, excluding initial source indexing; not an average or accuracy benchmark |
+| Billing/intake | Signed Stripe fixture events, replay handling, configured-price validation, public/API ingestion, deduplication, credential revocation and quotas tested |
+| Retail baseline | Dev 80/80 and holdout 20/20 passed; synthetic retail baseline only |
+| Migration | Fresh/repeated 001→003 and preserved legacy records checked; local app migrated after consistent backup |
+| Browser | Public Vendor inquiry submitted as Emma Wilson and received REQ-718081F57D; pricing and universal landing inspected; existing sample login preserved |
+| Frontend | JavaScript syntax/format checked; standalone sample rebuilt |
+| Containers | Compose configuration validated; Docker image/runtime not executed locally |
+| Infrastructure | Terraform format/cached provider-schema validation and Helm lint/render; no plan/apply or cloud rollout |
+| External services | No real Stripe purchase/webhook delivery, SMTP email, AWS or Kubernetes deployment |
+| Git | Local feature commits only; no push or GitHub Actions run |
 
-Reports are generated under ignored `reports/`. The retail benchmark is shown only in explicitly synthetic sample workspaces. A new business has no configured accuracy benchmark; these results do not measure quality on arbitrary uploaded business policies.
-
-Migration 002 is forward-only. Rolling back the former single-business schema requires the matching database/checkpoint/code backup. Password recovery, email verification/delivery, billing and real account/helpdesk integrations remain separate work before public operation.
+Ordinary tests disable live providers, email and payment credentials. `scripts.live_acceptance` is an explicit bounded opt-in using synthetic temporary data. Its successful example demonstrates the real API integration, not performance on arbitrary business rules. Evaluate representative requests before selling accuracy or time-saving claims. Detailed founder prerequisites are in `launch-checklist.ru.md`.

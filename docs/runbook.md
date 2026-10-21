@@ -6,7 +6,7 @@ Open **Monitoring**, select the run and inspect **Workflow**. Record the workspa
 
 ```bash
 docker compose ps
-docker compose logs --since=10m app orders
+docker compose logs --since=10m app indexer
 curl --fail http://127.0.0.1:8010/health/live
 curl --fail http://127.0.0.1:8010/health/ready
 ```
@@ -32,7 +32,7 @@ Check `ORDERS_API_URL`, service health, DNS/network rules and the 2-second timeo
 
 ## 2. Invalid model output
 
-**Expected:** at most two attempts, no draft, `manual`, reason `invalid_model_output`. Unknown fact IDs, missing required facts, extra schema fields and invalid tones must fail closed.
+Real-agent failures produce manual handoff with no approvable draft. Inspect the failing tool/verifier step, citation IDs, source state and model manifest. The bounded agent loop differs from the deterministic retail fixture. Unknown citations, unsupported claims and invalid schemas fail closed. The sample workflow below retains its two-attempt fact-selection contract.
 
 Use **Monitoring → Invalid model output → Run**. Inspect the version manifest and `usage.attempts`. Restore the provider/prompt configuration and retry. The app never displays provider secrets. An external provider outage produces `model_unavailable` or `model_not_configured` as appropriate.
 
@@ -71,7 +71,7 @@ Validate recovery with health/readiness, smoke and the correct evaluation provid
 
 ## 5. Process crashes or stuck processing
 
-Restart the application and inspect the ticket. A `review` ticket should resume its saved human-review checkpoint after restart. An interrupted `processing` claim can be retried after the 90-second lease expires. A new claim gets a new revision/thread; no cancellation/refund side effect exists to repeat. If the provider is still processing an ambiguous timed-out call, its billing is authoritative.
+Restart the application and inspect the ticket. A `review` ticket should resume its saved human-review checkpoint after restart. An interrupted `processing` claim can be retried after the lease expires (at least the agent timeout plus 30 seconds; 90 seconds for shorter workflows). A new claim gets a new revision/thread; no cancellation/refund side effect exists to repeat. If the provider is still processing an ambiguous timed-out call, its billing is authoritative.
 
 ```bash
 pytest tests/test_api.py -k persistent
@@ -93,6 +93,19 @@ AWS: use the seven-day automated RDS backups and point-in-time restore to a **ne
 
 For access errors, sign in again and check the selected workspace. Refresh stale tabs after switching workspaces. An owner/admin can inspect membership and restore an agent’s removed access. Admins cannot change owner/admin memberships; owner/self demotion is blocked. Never grant access by editing a ticket ID or copying another company’s rows.
 
-Invitation links are single-use, email-bound and expire after 7 days. Revoke/recreate them from Team if lost or expired; no email is sent automatically. Existing users must enter their existing password. Account recovery and verified-email delivery are not implemented.
+Invitation links are single-use, email-bound and expire after 7 days. Revoke/recreate them from Team if lost or expired; no email is sent automatically. Existing users must enter their existing password. Verification and password recovery use SMTP with hashed expiring tokens. Check sender/domain configuration and delivery before retrying; do not expose raw recovery tokens in incident logs. A password reset revokes all user sessions.
 
 Migration 002 is a forward-only schema conversion. Previous single-business records are retained under `legacy-demo` with no members, not assigned to the next registrant. The pre-conversion local backup lives under `var/backups/before-saas-20261021-163754/`. To restore it, stop the app and restore both application/checkpoint files together with the pre-conversion code. Do not downgrade by dropping tenant keys or roll back just the application image across this boundary. Keep production migration/restore credentials separate from ordinary employees.
+
+
+## 8. Indexing, credit reservations and payment lifecycle
+
+For pending knowledge, inspect `IndexJob` status, model profile, attempts and sanitized error. Ensure `python -m scripts.index_worker` is running with the same database and model configuration as the API. It retries pending/failed jobs up to three attempts and reclaims stale indexing leases. Correct configuration before selecting retry in Knowledge. A changed embedding model requires a new index profile; old vectors are not reused for a different profile.
+
+When AI returns 402, check the workspace plan, billing period and remaining credits. An active paid entitlement requires a verified current Stripe subscription period. Inspect signed webhook deliveries and authoritative subscription state; never grant access from a checkout success URL. Duplicate events are safe to replay. Configure prices, webhook secret and Customer Portal in Stripe test mode before switching to live mode.
+
+Token calls reserve credits first. Known usage settles and releases unused credits. An ambiguous timeout retains the reservation; `CreditReservation.usage.reconciliation_required` marks it. A process crash can leave `settled=false`. Review affected reservation IDs, trace IDs, stored token usage and the provider's authoritative usage before an operator adjusts credits. Do not automatically refund unknown calls or repeatedly retry chargeable requests. Use a reviewed database transaction to correct the reservation and its same-period usage counter together, record evidence/reason, and keep an incident audit outside customer messages. There is no self-service automatic reconciliation for ambiguous provider charges.
+
+If SMTP fails, registration does not pretend delivery succeeded. Check SMTP credentials/TLS and sender validation, then use the account's verification action. If Turnstile is not configured in production, signup/public forms fail closed; configure keys for the actual hostname rather than disabling protection for a public launch.
+
+Back up schema 003 and checkpoints before upgrades. Local pre-agent backup is under `var/backups/before-agent-20261021-181236/`; keep production backups outside the source checkout.

@@ -1,6 +1,6 @@
 # Deployment
 
-All configurations are committed locally. No GitHub push, AWS deployment or Kubernetes deployment has been performed. Terraform validation does not prove regional capacity, IAM authorization, certificate ownership or a successful apply.
+All configurations are prepared locally. No GitHub push, AWS deployment or Kubernetes deployment has been performed. Terraform validation does not prove regional capacity, IAM authorization, certificate ownership or a successful apply.
 
 ## AWS Fargate
 
@@ -25,7 +25,7 @@ An apply creates billable resources even with `desired_count=0`. The bootstrap t
 
 RDS manages the database password in Secrets Manager. ECS injects `DB_PASSWORD`; `DB_HOST`, `DB_USER` and `DB_NAME` construct a TLS-required connection string in server memory. Users authenticate through business accounts and database-backed sessions; no shared application API key is used. Production session cookies require HTTPS. Fargate trusts forwarded client addresses only from the VPC CIDR; its security group accepts application traffic only from the ALB. Keep equivalent trusted-proxy restrictions when adding another ingress so login throttles receive real client addresses without trusting arbitrary headers. `ALLOW_DEMO_SIGNUP=false` disables sample business signup. Keep Terraform state encrypted, access-controlled and locked. Never commit tfstate/tfvars or print secrets in build logs.
 
-The demo application uses the RDS provisioning account for application tables/checkpoints. Before real production use, create a restricted runtime database role and separate migration credentials. Configure backup/restore procedures and secret-rotation restarts. Provisioning IAM is separate from the narrowly scoped GitHub deployment role.
+The initial blueprint uses the RDS provisioning account for application tables/checkpoints. Before real production use, create a restricted runtime database role and separate migration credentials. Configure backup/restore procedures and secret-rotation restarts. Provisioning IAM is separate from the narrowly scoped GitHub deployment role.
 
 ## GitHub delivery
 
@@ -43,11 +43,13 @@ Configure these staging **variables** from Terraform outputs:
 | `ECS_CLUSTER` / `ECS_SERVICE` | Cluster/service outputs |
 | `APP_URL` | HTTPS URL with a certificate-matching hostname |
 | `ARTIFACTS_BUCKET` | S3 bucket output |
-| `LLM_MODEL` / `LLM_BASE_URL` | Only needed for optional live evaluation |
+| `AGENT_MODEL` / `VERIFIER_MODEL` / `OPENAI_BASE_URL` | Optional live acceptance overrides; defaults use official OpenAI endpoints and gpt-5.4-mini |
 
-Configure `LLM_API_KEY` as a staging **secret** only if live benchmarking is requested. The latter is a provider credential, not an AWS access key. Do not enable a live-model release without separately passing its live evaluation. The default deployment runs the deterministic baseline unless Terraform is configured with `llm_secret_arn` and `llm_model`.
+Configure `OPENAI_API_KEY` as a staging secret for optional bounded real-agent acceptance. Runtime credentials are separate Secrets Manager ARNs: `llm_secret_arn`, Stripe secret/webhook ARNs, SMTP password ARN and Turnstile secret ARN. Set the public HTTPS URL, embedding/agent models, matching token prices, SMTP sender, Turnstile site key, three Stripe monthly price IDs and reviewed legal URLs in Terraform variables. The example documents those fields. The task runs the application and a durable index worker; it does not run the synthetic orders service. A telemetry collector is optional.
 
-The dispatch reruns tests and baseline holdout, optionally runs a bounded real-model benchmark, builds and pushes a unique commit/run-tagged image, resolves its immutable digest, records rollback metadata, registers a task definition, runs Alembic as a one-off task, updates the service and waits for stability. The smoke creates and retains a separate synthetic business, publishes its policy, reviews a grounded ticket and logs out; it does not need demo signup enabled. It then runs the end-to-end smoke and preserves evidence in S3. The ECS circuit breaker handles unhealthy rollout; the workflow also restores the previous task definition after a failed rollout/smoke. Database downgrades are deliberately not automatic. Migration 002 is the initial conversion to business workspaces and is incompatible with the former single-business binary: take a consistent backup and plan a maintenance window for an existing installation. Do not automatically roll back to a pre-002 image against a converted database; restore the matching database/code backup instead. On the first deployment there may be no previously healthy version to restore; verify and repair prerequisites before retrying.
+For the very first deployment only, dispatch with `bootstrap=true`: this verifies the landing page and database readiness without requiring a nonexistent verified account. This is **not authenticated acceptance**. Register an operator-owned account on the resulting HTTPS service, confirm its email, and set `SMOKE_EMAIL` / `SMOKE_PASSWORD` as protected staging secrets. Then repeat with `bootstrap=false` (the default) for the full authenticated smoke. Subsequent releases require those secrets. Do not use the bootstrap option to skip acceptance of a public paid launch.
+
+The dispatch reruns tests and baseline holdout, optionally runs a bounded real-model benchmark, builds and pushes a unique commit/run-tagged image, resolves its immutable digest, records rollback metadata, registers a task definition, runs Alembic as a one-off task, updates the service and waits for stability. The full smoke signs in with the verified staging account, creates and retains an isolated synthetic business, publishes and indexes its policy, reviews a grounded request and logs out. With live providers it consumes a small amount of real model usage. It does not require sample signup. Evidence is preserved in S3. The ECS circuit breaker handles unhealthy rollout; the workflow also restores the previous task definition after a failed rollout/smoke. Database downgrades are deliberately not automatic. Migration 002 is the initial conversion to business workspaces and is incompatible with the former single-business binary: take a consistent backup and plan a maintenance window for an existing installation. Do not automatically roll back to a pre-002 image against a converted database; restore the matching database/code backup instead. On the first deployment there may be no previously healthy version to restore; verify and repair prerequisites before retrying.
 
 For release immutability, use image digests and retain old ECR images used by rollback. Only untagged images are subject to the included ECR lifecycle rule. Terraform ignores task-definition changes on the service so routine Terraform applies do not accidentally undo CI releases.
 
@@ -71,7 +73,7 @@ Review the destroy plan. Production RDS deletion protection must be deliberately
 
 ## Optional Kubernetes / kind
 
-The Helm chart deploys the same image, with a synthetic orders sidecar and an **external PostgreSQL/pgvector** database. No EKS cluster is provisioned.
+The Helm chart deploys the API and index-worker with an **external PostgreSQL/pgvector** database. The optional synthetic orders sidecar is disabled by default (`includeDemoOrders=false`). Enable it only for isolated development samples. No EKS cluster is provisioned.
 
 ```bash
 kind create cluster --name supportops

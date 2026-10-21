@@ -1,0 +1,53 @@
+{
+  "status": "review",
+  "reason": null,
+  "models": {
+    "engine": "openai-agent-v1",
+    "model": "gpt-5.4-mini",
+    "verifier": "gpt-5.4-mini",
+    "embedding": "text-embedding-3-large",
+    "embedding_dimensions": 1536,
+    "embedding_profile": "e8d66ec4577ab1ec980eab39c9be24011914ccf2c6280e72363f8ad65acecd4b",
+    "prompt": "agent-v1-b9289f5b2876",
+    "organization_id": "c78d0fec257b409bbce81c376706d636",
+    "documents": {
+      "4c8018c2eca34952a8086d622231e992-0": "1"
+    },
+    "template": {
+      "id": "5aa2d0e8c4424145bbb439f399620a97",
+      "revision": 1
+    },
+    "code": "local"
+  },
+  "tool_calls": [
+    {
+      "name": "search_knowledge",
+      "duration_ms": 876.07,
+      "evidence_ids": [
+        "4c8018c2eca34952a8086d622231e992-0"
+      ],
+      "result_count": 1
+    }
+  ],
+  "usage": {
+    "input_tokens": 2659,
+    "output_tokens": 344,
+    "embedding_tokens": 13,
+    "cost_usd": 0.00354394,
+    "attempts": 4
+  },
+  "sources": [
+    {
+      "title": "Business travel expense reimbursement",
+      "score": 0.6916
+    }
+  ],
+  "verifier": {
+    "supported": true,
+    "needs_live_data": false,
+    "unsafe_action": false,
+    "issues": []
+  },
+  "draft": "Hi Emma Wilson,\n\nYes \u2014 you may submit an itemized hotel receipt after returning from a business trip. The policy says to submit the receipt within 30 calendar days after the trip. Please note that the finance team must review and approve each reimbursement request, and submitting it does not mean payment has been approved or issued.\n\nIf you'd like, I can help you word the receipt submission message.\n\nPlease let us know if you need any further help.\nBest regards,\nBright Operations Support",
+  "note": "Synthetic live acceptance; one example, not an accuracy or average-cost benchmark. Excludes initial document indexing."
+}

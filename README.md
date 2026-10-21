@@ -1,16 +1,12 @@
 # SupportOps AI
 
-A support platform for independent businesses. Each business registers its own workspace, uploads its policies and reply templates, and invites employees to handle customer requests. Knowledge, tickets, team access, metrics and review history are scoped to that business.
+A multi-business AI platform for incoming requests: operations, sales, internal services, IT and customer teams. Businesses register a workspace, configure request types, connect incoming work, upload knowledge and invite employees. A real OpenAI agent investigates each request with scoped tools and semantic RAG, prepares a cited response, and passes it through a separate grounding check before human review.
 
-Replies use verified excerpts from the business’s current policies. Employees review and edit every draft before approving it. Approval saves the reply; sending it to a customer remains a separate action.
-
-![SupportOps business registration](docs/preview.png)
-
-[View an employee’s company workspace](docs/workspace-preview.png).
+![SupportOps platform](docs/preview.png)
 
 ## Start locally
 
-Requires Python 3.11+ (3.13 recommended). Node is optional, for JavaScript formatting.
+Python 3.13 is recommended. Node is needed only for frontend formatting.
 
 ```bash
 python3.13 -m venv .venv
@@ -18,97 +14,102 @@ source .venv/bin/activate
 pip install -r requirements.lock
 pip install --no-deps -e .
 cp .env.example .env
+# Set OPENAI_API_KEY in the server environment or ignored .env.
 python -m scripts.dev
 ```
 
-Open [SupportOps AI](http://127.0.0.1:8010). API documentation: [OpenAPI](http://127.0.0.1:8010/docs). Stop both local services with `Ctrl+C`. The ignored `var/` directory holds the SQLite database, sessions and LangGraph checkpoints.
+Open [the platform](http://127.0.0.1:8010) or [the product overview](http://127.0.0.1:8010/#home). API docs: [OpenAPI](http://127.0.0.1:8010/docs). Original local databases were backed up before migrations under ignored `var/backups/`. No secrets belong in Git.
 
-## Set up a business
+The full setup guide and remaining founder actions are in [launch checklist — Russian](docs/launch-checklist.ru.md). Pricing and cost assumptions are in [unit economics](docs/unit-economics.md).
 
-1. **Create workspace**: enter your name, work email, business name and a password of at least 12 characters. You become the owner. New businesses start with no tickets or policies and one customizable reply template.
-2. **Knowledge base → Upload file**: upload TXT, Markdown, PDF, DOCX or JSON. Alternatively, choose **Add policy** and paste a rule. Use a clear title and category. Include the subject in the policy text so related questions can find it.
-3. **Reply templates**: create or edit wording, or import existing templates. Include `{{facts}}` exactly once. Other variables: `{{customer_name}}`, `{{business_name}}`, `{{agent_name}}`, `{{subject}}`, `{{ticket_id}}`. Match a category or use `other` as the default. A ticket can explicitly select a template.
-4. **Team → Invite a teammate**: choose an email and role. Copy the single-use link and share it yourself. No email is sent automatically. The link expires after 7 days and only the specified email can accept it. Existing users enter their existing account password.
-5. **New ticket**: enter a customer’s request. **Prepare a reply** retrieves only this business’s active rules and uses its template. Review the text, sources and checks. Edit as needed, then **Approve reply** or escalate.
-6. **Settings**: update business details, create another business or switch between your workspaces. Each workspace has separate data and memberships.
+## Real agent and RAG
 
-| Role | Access |
+Default business configuration:
+
+| Component | Implementation |
 | --- | --- |
-| Owner | Business settings, policies, templates, tickets, audit history; invite/manage admins and agents |
-| Admin | Business settings, policies, templates, tickets, audit history; invite/manage agents |
-| Agent | Read business knowledge/templates, create and analyze tickets, review replies |
+| Agent | `gpt-5.4-mini`, OpenAI Responses API, bounded tool-calling loop |
+| Grounding reviewer | Separate fresh model call with a strict structured verdict |
+| Embeddings | `text-embedding-3-large`, real 1536-dimensional vectors |
+| Search | Tenant/profile-scoped pgvector cosine search, lexical ranking and maximal marginal relevance |
+| Documents | Selectable-text PDF, DOCX, TXT, Markdown and JSON; immutable versions and effective dates |
+| Indexing | Durable database jobs, immediate background processing, separate restartable worker and retry endpoint |
+| Evidence | Paragraph-level citations, current-source rechecks and saved model/document/template versions |
+| Human control | Persistent LangGraph interrupt/resume; approve, edit or escalate; no external action tools |
 
-Removing membership immediately blocks that workspace’s API access, including existing sessions. Owners cannot remove themselves or be demoted through member management.
+The agent can search again, read passages, inspect request types/templates and request a handoff. Tools cannot choose a tenant, execute arbitrary code, send replies, issue payments or change external records. Every factual answer block must cite retrieved evidence. A separate checker sees the complete rendered answer, including the template. Unsupported citations, failed grounding, model problems or exceeded budgets prevent an approvable draft. Model verification is a review aid, not a guarantee of truth; a person remains responsible for the decision.
 
-## Knowledge and templates
+Search does not require literal word overlap in semantic mode. Embedding model, endpoint and dimension profile are recorded so different indexes cannot be mixed. Changing the embedding model requires reindexing. Current/archived/future document rules and company filters are applied before evidence reaches the agent.
 
-Uploads are limited to **2 MB and 100,000 extracted text characters**. PDFs must have selectable text, be unencrypted and have at most 50 pages. DOCX imports use document paragraphs. Parsing runs in a bounded subprocess; original uploaded files are not retained. Extracted text, versions, hashes and chunks are stored in the workspace database.
+`MODEL_PROVIDER=baseline` and `EMBEDDING_PROVIDER=baseline` are explicit offline fixture modes. Sample retail workspaces remain synthetic and cannot own real businesses, create live intake connections or consume free external embedding calls. The separate 100-case retail benchmark does not measure the new general-purpose agent.
 
-Open a policy to **Publish new version** or **Archive policy**. New versions close the previous effective interval; archived or future rules are excluded from current retrieval. Existing replies retain their original source and template snapshots.
+## Where requests come from
 
-Template imports accept a text document containing one template, or JSON:
+1. **Hosted form:** an admin creates a public request type and form in **Request sources**, then shares its link. A submission becomes a request in that company’s queue. No AI work is triggered automatically.
+2. **Inbound API:** a website, CRM or workflow sends JSON with a write-only Bearer credential. Tokens are shown once, stored hashed and revocable. `external_id` deduplicates imports. The caller cannot read requests, pick another company, select privileged routing or trigger billable AI.
+3. **Employees:** members create internal requests, choose a type and route work to an active teammate. Agents can assign work to themselves; admins manage other assignments.
 
-```json
-[
-  {
-    "name": "Friendly appointment reply",
-    "category": "cancellation",
-    "body": "Hi {{customer_name}},\n\n{{facts}}\n\nBest regards,\n{{agent_name}}\n{{business_name}}"
-  }
-]
-```
+Native email inbox and messenger synchronization are **not connected**. They require an adapter from the business’s selected provider to the inbound API. Request attachments and automatic outbound delivery are not implemented. Knowledge-document uploads are a separate feature.
 
-Each import accepts up to 50 templates and validates the full batch before saving. Template edits use revision checks to avoid overwriting another person’s changes.
+Production public forms require configured Turnstile protection. Production signup uses Turnstile by default, and verified email is required before AI processing, indexing or external-source setup. Tokens, CSRF, request size limits and persistent throttles protect the entry points. A verified sender/SMTP account is required to actually deliver verification and password-recovery emails.
 
-## What is implemented
+## Workspace setup
 
-- Business registration, sign-in/out, workspace switching, Argon2id password hashes, database-backed expiring sessions and CSRF protection.
-- Membership roles, email-bound invitations, access revocation and workspace audit events.
-- Tenant-scoped SQL queries, composite object keys/foreign keys, per-business idempotency keys and workflow threads.
-- File/manual policy ingestion, chunking, version/effective-date filtering, archival and company-owned reply templates.
-- Responsive English workspace with ticket queue, search, priorities, source inspection, draft editing, approval/escalation and monitoring.
-- FastAPI, SQLAlchemy, Alembic, LangGraph interrupt/resume, SQLite quick start and PostgreSQL/pgvector support.
-- Tests, a separate synthetic retail evaluation suite, Docker, CI, Terraform AWS blueprint and optional Helm chart.
+1. Register your business; you become its owner and start a 14-day trial.
+2. Create **Request types**, such as vendor inquiry, travel expenses or IT access. Add instructions for investigation. Mark a type public only when it may appear on a form.
+3. Upload documents in **Knowledge base**. Wait for **Semantic index ready**; retry failed indexing from the source dialog. Publish a new version instead of changing an existing rule in place.
+4. Customize **Reply templates**. Include `{{facts}}` exactly once; optional variables include requester name (`{{customer_name}}`), business, agent, subject and request ID.
+5. Invite employees through single-use, email-bound links. Owners manage admins and agents; admins manage agents; agents investigate and review requests.
+6. Connect a source or create an internal request. Run the agent, inspect its sources/tool record, edit the draft, then approve or escalate.
+7. Review **Plan & usage**. An owner chooses a paid plan through Stripe when the operator has configured payments.
 
-`MODEL_PROVIDER=baseline` works offline without an LLM key. It retrieves current policy excerpts and inserts them into the selected template. The optional `openai_compatible` provider selects verified fact IDs and tone through a configured HTTP endpoint. Trusted code renders the facts; unsupported/missing selections get at most two attempts before a manual handoff.
+## Subscriptions and cost control
 
-Retrieval uses a **128-dimensional character-hash vector baseline** combined with lexical overlap and categories. This is not a pretrained semantic search model. Classification uses a small English/Russian keyword baseline; businesses can organize their policies/templates with custom categories and explicitly select templates. Representative questions and human review are necessary to assess usefulness for a new business.
+| Plan | Monthly USD / workspace | Included AI credits | Seats | Requests / period | Stored knowledge chunks |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Trial | $0 for 14 days | 100 one-time | 3 | 300 | 300 |
+| Starter | $49 | 1,000 | 5 | 10,000 | 1,000 |
+| Growth | $149 | 5,000 | 20 | 50,000 | 5,000 |
+| Scale | $399 | 15,000 | 50 | 100,000 | 15,000 |
 
-## Sample workspace
+Credits cover agent input/output tokens, query embeddings, verification and document indexing. Charges are rounded up from recorded provider cost using an internal $0.005 cost unit. A run reserves up to 90 available credits; unused reservation is released after known usage is recorded. The default provider cost budget is $0.40 per run. Long investigations can stop at this budget. Unknown provider charges retain their reservation until operator reconciliation.
 
-**Explore a sample workspace** creates a separate synthetic business, Northstar Goods, with American customer names, sample policies and read-only fake order records. Each sample signup receives its own workspace. New real businesses never inherit this data or call this mock order integration. Sample signup is disabled in production unless `ALLOW_DEMO_SIGNUP=true` is explicitly configured.
+No automatic overage charges or top-ups exist. AI and indexing pause when credits are exhausted; reading and manual review remain available. Trial credits are one-time, and paid usage resets from the verified subscription billing period. Credit quantities are **not a fixed number of replies**. Update configured token rates when changing models or provider prices.
 
-`make demo` exports a standalone browser simulation on port 8011. It has no registration server or shared team persistence and is intended only for a sample walkthrough.
+Checkout verifies the server-side Stripe price against the published monthly USD plan. Only a signed, replay-checked webhook activates a paid entitlement; the return URL never proves payment. Subscription updates, cancellation and payment failures update access. Owners manage an existing subscription through Stripe Customer Portal. Stripe, SMTP, spam-protection keys and reviewed operator policies still need real account configuration before public sales. No live Stripe payment has been taken.
 
-## Run checks
+## Verification
 
 ```bash
 make test
-make eval
-make smoke  # requires the local API; creates a separate synthetic test business
+make eval                 # legacy synthetic retail benchmark only
+python -m scripts.live_acceptance  # opt-in real OpenAI calls; synthetic data; $0.20 run budget
 npm run check:format
 ```
 
-The development/holdout suite covers **100 synthetic retail cases**. Those results are displayed only in sample workspaces, and do not claim accuracy for another business’s policies. A real workspace shows that no business-specific evaluation dataset has been configured.
+A real OpenAI acceptance test passed for an internal travel-expense question: document embedding → semantic search tool → generated policy explanation → separate grounding check → saved human approval. Its agent/query/review calls cost approximately **$0.00354 in that one run**, excluding initial document indexing. This is not an average-cost or production-accuracy benchmark. Controlled tests additionally cover bad citations, model rejection, indexing failures/retry, tenant boundaries, inbound channels, quotas, Stripe signatures/lifecycle and recovery tokens.
 
 ```bash
+# A full local pgvector stack; configure .env first.
 docker compose up --build -d
-# http://127.0.0.1:8010
+# A separate indexing worker is included.
 docker compose down
 ```
 
-Compose starts PostgreSQL/pgvector, runs migrations and starts the app and sample orders service. The database has no host port; the app binds to loopback. Its named volume preserves data; `docker compose down -v` deletes that local database. Stop the Python preview before using the same port.
+The current machine’s Docker daemon is unavailable; local PostgreSQL/container execution remains unverified and is included in CI. Terraform schema validation, Helm rendering/lint and Compose configuration checks are available. AWS and Kubernetes have not been deployed. Start real pilots and validate representative business requests before public expansion.
 
-## Existing databases and deployment
+## Delivery and operation
 
-Migration `002` converts the previous single-business schema and preserves its records in an unassigned `legacy-demo` archive. Newly registered users receive no membership in that archive. Existing local data was backed up under `var/backups/` before migration. Do not copy legacy records into a new customer’s workspace.
+- SQLite quick start; private PostgreSQL/pgvector and persisted checkpoints for deployment.
+- Terraform: HTTPS ALB, Fargate application/indexer, RDS, ECR, Secrets Manager, CloudWatch, optional telemetry and scoped GitHub OIDC.
+- Helm and Compose include a durable indexing worker. Failed/interrupted jobs can be retried safely.
+- Production smoke uses a pre-verified account through `SMOKE_EMAIL` / `SMOKE_PASSWORD`; it never bypasses email verification.
+- Owner JSON export includes business records without passwords, session cookies, invitation hashes or API credentials.
+- Verification/recovery links are expiring, single-use and hashed; password reset revokes existing sessions.
+- Operator policy drafts are available at `/terms` and `/privacy`. Production checkout requires operator details and reviewed HTTPS policy URLs. Configuration checks in Settings do not prove legal suitability or deployment success.
 
-Development runs migrations automatically. Production requires a separate Alembic migration step and **HTTPS**, because session cookies are Secure. Migration `002` is forward-only: restore a consistent backup to return to the former schema. An old application image is not compatible with the new schema.
+Migrations `002` and `003` preserve existing records. Back up both application/checkpoint data before upgrades. `002` is forward-only; returning to the former single-business binary requires its matching database/code backup.
 
-The platform runs locally and has multi-business authorization. Public-service operations still require email verification, account recovery/password reset, abuse controls/quotas, billing if desired, and data retention/deletion processes. SMTP, SSO, payment processing and real CRM/order/helpdesk integrations are not implemented. New workspaces answer from uploaded knowledge; live account/order questions need a human check. No outbound customer messages are sent.
+Repository remote: [dkkdark/SupportOps-AI](https://github.com/dkkdark/SupportOps-AI). Work remains in local feature commits. **No push, publication or cloud apply has been performed.**
 
-Local application tests, browser workflows and synthetic evaluation have passed. Terraform/Helm/Compose configuration checks are available. Docker’s daemon is unavailable on the current machine, so real PostgreSQL/container execution is left to CI; AWS, Kubernetes and an external LLM have not been deployed or benchmarked.
-
-Git remote: [dkkdark/SupportOps-AI](https://github.com/dkkdark/SupportOps-AI). Features are committed locally. **Nothing has been pushed or published.**
-
-Further details: [architecture](docs/architecture.md), [deployment](docs/deployment.md), [runbook](docs/runbook.md), [evaluation](docs/evaluation.md), [verification](docs/verification.md).
+Details: [architecture](docs/architecture.md), [deployment](docs/deployment.md), [runbook](docs/runbook.md), [verification](docs/verification.md).
