@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -22,9 +22,9 @@ class Order(BaseModel):
     status: Literal["processing", "shipped", "delayed", "delivered", "cancelled"]
     total: float = Field(ge=0)
     currency: Literal["RUB"] = "RUB"
-    placed_at: str
-    expected_at: str
-    delivered_at: str | None = None
+    placed_at: date
+    expected_at: date
+    delivered_at: date | None = None
     carrier: str
     tracking: str | None = None
     items: list[dict]

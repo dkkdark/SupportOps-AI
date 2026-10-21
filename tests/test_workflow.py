@@ -77,7 +77,7 @@ def test_cancel_processing_does_not_claim_action(client):
 
 def test_missing_order_and_ownership(client,payload):
     for override,reason in [({"order_id":None},"missing_order_id"),({"order_id":"9999"},"order_not_found"),({"customer":"Другой человек"},"ownership_review")]:
-        t=client.post('/api/tickets',json={**payload,**override}).json()
+        t=client.post('/api/tickets',json={**payload,"message":"Где мой заказ и можно ли отменить покупку?",**override}).json()
         result=client.post(f"/api/tickets/{t['id']}/analyze",json={}).json()
         assert result["result"]["reason"]==reason
 

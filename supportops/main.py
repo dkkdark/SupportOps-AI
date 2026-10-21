@@ -175,10 +175,11 @@ def create_app(config: Settings | None = None, orders_transport=None, llm_transp
                 result["duration_ms"] = round((time.perf_counter()-started)*1000,2)
                 result["thread_id"] = thread
                 t.result = result
+                t.order_id = result.get("order_id",t.order_id)
                 t.category = result.get("categories",["other"])[0]
                 t.status = "manual" if result.get("reason") else "review"
-            except Exception:
-                logging.exception("workflow_failed ticket_id=%s",id)
+            except Exception as exc:
+                logging.error("workflow_failed ticket_id=%s error_type=%s",id,type(exc).__name__)
                 t.result = {"reason":"workflow_failed","trace_id":initial["trace_id"],"steps":[],"sources":[],"draft":None}
                 t.status = "manual"
             t.updated_at = utcnow()

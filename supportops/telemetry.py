@@ -9,9 +9,14 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 
 logger = logging.getLogger("supportops")
+_configured = False
 
 
 def configure(settings):
+    global _configured
+    if _configured:
+        return
+    _configured = True
     resource = Resource.create({"service.name": settings.otel_service_name, "service.version": settings.code_version})
     provider = TracerProvider(resource=resource)
     readers = []

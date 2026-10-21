@@ -58,6 +58,11 @@ def build_graph(settings, sessions, checkpointer, orders_transport=None, llm_tra
     def classification(s):
         with step(s,"classify"):
             s["categories"] = classify(s["message"])
+            mentioned = set(re.findall(r"(?:заказ\w*\s*(?:№|#)?\s*|[№#]\s*)(\d{4,12})",s["message"],re.I))
+            if len(mentioned)>1 or (mentioned and s.get("order_id") and s["order_id"] not in mentioned):
+                s["reason"] = "order_id_mismatch"
+            elif len(mentioned)==1 and not s.get("order_id"):
+                s["order_id"] = next(iter(mentioned))
             if re.search(r"ignore.{0,30}instructions|system prompt|игнорир\w*.{0,30}инструк|забудь.{0,20}правил", s["message"], re.I):
                 s["reason"] = "untrusted_instructions"
         return s
@@ -84,7 +89,7 @@ def build_graph(settings, sessions, checkpointer, orders_transport=None, llm_tra
                     elif order.customer.casefold().strip() != s["customer"].casefold().strip():
                         s["reason"] = "ownership_review"
                     else:
-                        s["order"] = order.model_dump()
+                        s["order"] = order.model_dump(mode="json")
             except (httpx.TimeoutException, httpx.ConnectError):
                 s["reason"] = "orders_unavailable"
             except (httpx.HTTPError, ValidationError, ValueError):
@@ -123,7 +128,7 @@ def build_graph(settings, sessions, checkpointer, orders_transport=None, llm_tra
                         s["reason"] = "action_requires_review"
                 if "returns" in s["categories"]:
                     needed += ["return_window","return_shipping"]
-                    if not order.get("delivered_at") or date.today() > date.fromisoformat(order["delivered_at"])+timedelta(days=30):
+                    if not order.get("delivered_at") or date.fromisoformat(order["delivered_at"]) > date.today() or date.today() > date.fromisoformat(order["delivered_at"])+timedelta(days=30):
                         s["reason"] = "return_eligibility_review"
                 if "damage" in s["categories"]:
                     s["reason"] = "damage_requires_review"
