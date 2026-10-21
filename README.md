@@ -99,6 +99,10 @@ docker compose down
 
 The current machine’s Docker daemon is unavailable; local PostgreSQL/container execution remains unverified and is included in CI. Terraform schema validation, Helm rendering/lint and Compose configuration checks are available. AWS and Kubernetes have not been deployed. Start real pilots and validate representative business requests before public expansion.
 
+## Gmail sender
+
+The configured sender/contact is `info.xenonimus@gmail.com`. Server-side STARTTLS/SSL transport, credential-aware readiness and non-sending SMTP diagnostics are implemented. Add the Google App Password only to local `.env` or server secret storage; see [Gmail setup — Russian](docs/gmail-setup.ru.md). `python -m scripts.check_email` performs no network requests; add `--connect` to check TLS/authentication without sending a message. Incoming Gmail synchronization is not implemented.
+
 ## Delivery and operation
 
 - SQLite quick start; private PostgreSQL/pgvector and persisted checkpoints for deployment.

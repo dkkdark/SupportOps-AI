@@ -15,3 +15,10 @@ public_base_url = "https://REPLACE-WITH-YOUR-DOMAIN.example"
 
 # Configure Stripe/SMTP/Turnstile secret ARNs and reviewed policy URLs before paid launch.
 # Never put raw secrets in tfvars or Terraform state.
+
+# Gmail sender; the App Password is stored only in Secrets Manager.
+smtp_host = "smtp.gmail.com"
+smtp_user = "info.xenonimus@gmail.com"
+smtp_from = "SupportOps AI <info.xenonimus@gmail.com>"
+legal_contact_email = "info.xenonimus@gmail.com"
+# smtp_password_secret_arn = "arn:aws:secretsmanager:REGION:ACCOUNT:secret:gmail-app-password-..."

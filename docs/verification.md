@@ -4,12 +4,13 @@ Verified October 21, 2026, for the demo budget release. These are local checks, 
 
 | Check | Evidence |
 | --- | --- |
-| Python/API/workflow suite | 54 passed; 1 real PostgreSQL integration skipped locally because Docker is unavailable |
+| Python/API/workflow suite | 60 passed; 1 real PostgreSQL integration skipped locally because Docker is unavailable |
 | Tenant and account boundaries | Independent companies, memberships, CSRF/origin, stale workspace headers, scoped routing/intake, invitations, verification/reset and revoked sessions covered |
 | Real agent protocol | Controlled Responses/embedding transports cover tool loops, verifier rejection, invalid citations, index recovery, archive filtering, checkpoints and credit gates |
 | Real OpenAI acceptance | `gpt-5.4-mini` agent + verifier, `text-embedding-3-large`, one synthetic policy/request, tool retrieval and human approval passed; sanitized report in `live-model-verification.json` |
 | Cost of this one request | $0.00354394 including query embedding, agent and verifier, excluding initial source indexing; not an average or accuracy benchmark |
 | Demo allowance | Dollar-accurate settlement, cross-workspace account scope, concurrent reservations, retained unknown usage, disabled payments, notifications and manual access tested |
+| Gmail transport | STARTTLS/SSL ordering, credential-aware readiness, no-send connection check, header rejection, sanitized errors and recovery resend/revocation tested with mocked SMTP |
 | Billing/intake | Signed Stripe fixture events, replay handling, configured-price validation, public/API ingestion, deduplication, credential revocation and quotas tested |
 | Retail baseline | Dev 80/80 and holdout 20/20 passed; synthetic retail baseline only |
 | Migration | Fresh/repeated 001→003 and preserved legacy records checked; local app migrated after consistent backup |
