@@ -10,7 +10,14 @@ import secrets
 import uuid
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError, VerifyMismatchError
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Request,
+    Response,
+)
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
@@ -111,6 +118,7 @@ class Identity:
     organization: dict | None
     csrf_token: str
     session_hash: str
+    email_verified: bool = False
 
 
 def org_dict(org, role=None):
@@ -255,6 +263,18 @@ class Auth:
                 org_dict(org, membership.role) if org else None,
                 session.csrf_token,
                 session.token_hash,
+                user.email_verified,
+            )
+
+    def ensure_verified(self, actor):
+        if (
+            self.config.app_env == "production"
+            and self.config.require_verified_email
+            and not actor.email_verified
+        ):
+            raise HTTPException(
+                403,
+                "Verify your email address before using AI or connecting external request sources.",
             )
 
     def current(self, request: Request):
@@ -307,7 +327,12 @@ class Auth:
         router = APIRouter(prefix="/api")
 
         @router.post("/auth/register", status_code=201)
-        def register(body: RegisterInput, request: Request, response: Response):
+        def register(
+            body: RegisterInput,
+            request: Request,
+            response: Response,
+            tasks: BackgroundTasks,
+        ):
             self.throttle(request, "register", limit=10)
             with self.sessions() as db:
                 if db.scalar(select(User).where(User.email == body.email)):
@@ -325,7 +350,13 @@ class Auth:
                 db.flush()
                 org = create_organization(db, body.business_name, body.industry, user)
                 try:
-                    return self.issue(db, response, user, org.id, request)
+                    result = self.issue(db, response, user, org.id, request)
+                    from supportops.accounts import send_token
+
+                    tasks.add_task(
+                        send_token, self.config, self.sessions, user.id, "verify"
+                    )
+                    return result
                 except IntegrityError:
                     db.rollback()
                     raise HTTPException(
@@ -400,6 +431,7 @@ class Auth:
                         "id": actor.user_id,
                         "name": actor.name,
                         "email": actor.email,
+                        "email_verified": actor.email_verified,
                     },
                     "organization": actor.organization,
                     "memberships": [org_dict(o, m.role) for o, m in memberships],
@@ -496,6 +528,12 @@ class Auth:
                     raise HTTPException(
                         403, "Only the owner can manage administrators."
                     )
+                if body.active and not member.active:
+                    from supportops.billing import seat_available
+
+                    seat_available(
+                        db, actor.organization_id, db.get(User, user_id).email
+                    )
                 member.role, member.active = body.role, body.active
                 audit(
                     db,
@@ -531,6 +569,9 @@ class Auth:
             if body.role == "admin" and actor.role != "owner":
                 raise HTTPException(403, "Only the owner can invite administrators.")
             with self.sessions() as db:
+                from supportops.billing import seat_available
+
+                seat_available(db, actor.organization_id, body.email)
                 member = db.scalar(
                     select(Membership)
                     .join(User, User.id == Membership.user_id)
@@ -634,6 +675,9 @@ class Auth:
                     )
                     db.add(user)
                     db.flush()
+                from supportops.billing import seat_available
+
+                seat_available(db, invitation.organization_id, body.email)
                 # Single-use claim is atomic, even for simultaneous acceptance requests.
                 claimed = db.execute(
                     update(Invitation)

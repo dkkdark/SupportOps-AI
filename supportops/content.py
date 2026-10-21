@@ -9,7 +9,16 @@ import re
 import subprocess
 import sys
 import threading
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+)
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from sqlalchemy import select
 from supportops.auth import Identity, audit, identifier
@@ -200,6 +209,23 @@ def publish(db, actor, body, file_name=None):
     db.add(source)
     db.flush()
     pieces = chunks(body.text)
+    from sqlalchemy import func
+    from supportops.billing import entitlement
+
+    limits = entitlement(db, actor.organization_id)
+    stored = (
+        db.scalar(
+            select(func.count())
+            .select_from(Document)
+            .where(Document.organization_id == actor.organization_id)
+        )
+        or 0
+    )
+    if not limits["plan"] == "demo" and stored + len(pieces) > limits["chunks"]:
+        raise HTTPException(
+            402,
+            "Knowledge storage limit reached. Upgrade your plan before publishing more documents.",
+        )
     for i, text in enumerate(pieces):
         fact_id = f"policy_{id}_{i}"
         db.add(
@@ -275,6 +301,27 @@ async def uploaded_text(file):
 
 
 def content_router(auth, sessions):
+    from supportops.semantic import enqueue, index_source, index_status
+    from supportops.billing import entitlement
+
+    config = auth.config
+    transport = getattr(auth, "embedding_transport", None)
+
+    def queue(db, actor, source_id, tasks):
+        if actor.organization and actor.organization.get("is_demo"):
+            return
+        job = enqueue(db, config, actor.organization_id, source_id)
+        db.commit()
+        if job:
+            tasks.add_task(
+                index_source,
+                config,
+                sessions,
+                actor.organization_id,
+                source_id,
+                transport,
+            )
+
     router = APIRouter(prefix="/api")
 
     @router.get("/knowledge")
@@ -286,30 +333,38 @@ def content_router(auth, sessions):
                 .order_by(KnowledgeSource.created_at.desc())
             ).all()
             return [
-                source_dict(
-                    d,
-                    len(
-                        db.scalars(
-                            select(Document.id).where(
-                                Document.organization_id == actor.organization_id,
-                                Document.source_id == d.id,
-                            )
-                        ).all()
+                {
+                    **source_dict(
+                        d,
+                        len(
+                            db.scalars(
+                                select(Document.id).where(
+                                    Document.organization_id == actor.organization_id,
+                                    Document.source_id == d.id,
+                                )
+                            ).all()
+                        ),
                     ),
-                )
+                    "indexing": index_status(db, config, d),
+                }
                 for d in docs
             ]
 
     @router.post("/knowledge", status_code=201)
-    def create_source(body: PolicyInput, actor: Identity = Depends(auth.admin)):
+    def create_source(
+        body: PolicyInput, tasks: BackgroundTasks, actor: Identity = Depends(auth.admin)
+    ):
         with sessions() as db:
+            auth.ensure_verified(actor)
             result = publish(db, actor, body)
             db.commit()
+            queue(db, actor, result["id"], tasks)
             return result
 
     @router.post("/knowledge/upload", status_code=201)
     async def upload_policy(
         request: Request,
+        tasks: BackgroundTasks,
         file: UploadFile = File(...),
         title: str = Form(...),
         category: str = Form("other"),
@@ -332,9 +387,20 @@ def content_router(auth, sessions):
         except ValidationError as exc:
             raise HTTPException(422, str(exc.errors()[0]["msg"]))
         with sessions() as db:
+            auth.ensure_verified(actor)
             result = publish(db, actor, body, name)
             db.commit()
+            queue(db, actor, result["id"], tasks)
             return result
+
+    @router.post("/knowledge/{id}/reindex")
+    def reindex(id: str, tasks: BackgroundTasks, actor: Identity = Depends(auth.admin)):
+        with sessions() as db:
+            source = db.get(KnowledgeSource, (actor.organization_id, id))
+            if not source or source.archived:
+                raise HTTPException(404, "Active document not found.")
+            queue(db, actor, id, tasks)
+            return {"status": "queued"}
 
     @router.post("/knowledge/{id}/archive")
     def archive(id: str, actor: Identity = Depends(auth.admin)):

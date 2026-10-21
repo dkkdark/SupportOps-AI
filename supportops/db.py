@@ -13,7 +13,13 @@ from sqlalchemy import (
     create_engine,
     event,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    mapped_column,
+    sessionmaker,
+    relationship,
+)
 from sqlalchemy.types import TypeDecorator
 from pgvector.sqlalchemy import Vector
 
@@ -55,6 +61,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(160), unique=True)
     name: Mapped[str] = mapped_column(String(100))
     password_hash: Mapped[str] = mapped_column(String(255))
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow
     )
@@ -184,6 +191,9 @@ class Ticket(Base):
     )
     id: Mapped[str] = mapped_column(String(40), primary_key=True)
     template_id: Mapped[str | None] = mapped_column(String(40))
+    context: Mapped["RequestContext | None"] = relationship(
+        uselist=False, lazy="selectin"
+    )
     created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
     customer: Mapped[str] = mapped_column(String(100))
     email: Mapped[str] = mapped_column(String(160), default="")
@@ -251,6 +261,187 @@ class Review(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow
     )
+
+
+class SemanticVector(TypeDecorator):
+    impl = JSON
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        return dialect.type_descriptor(
+            Vector(1536) if dialect.name == "postgresql" else JSON()
+        )
+
+
+class ChunkEmbedding(Base):
+    __tablename__ = "chunk_embeddings"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "document_id"],
+            ["documents.organization_id", "documents.id"],
+        ),
+    )
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), primary_key=True
+    )
+    document_id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    profile: Mapped[str] = mapped_column(String(64), primary_key=True)
+    model: Mapped[str] = mapped_column(String(120))
+    text_hash: Mapped[str] = mapped_column(String(64))
+    vector: Mapped[list] = mapped_column(SemanticVector())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
+
+class IndexJob(Base):
+    __tablename__ = "index_jobs"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "source_id"],
+            ["knowledge_sources.organization_id", "knowledge_sources.id"],
+        ),
+    )
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), primary_key=True
+    )
+    source_id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    profile: Mapped[str] = mapped_column(String(64), primary_key=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str | None] = mapped_column(String(160))
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
+
+class RequestType(Base):
+    __tablename__ = "request_types"
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), primary_key=True
+    )
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    description: Mapped[str] = mapped_column(Text, default="")
+    instructions: Mapped[str] = mapped_column(Text, default="")
+    visibility: Mapped[str] = mapped_column(String(20), default="internal")
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
+
+class Intake(Base):
+    __tablename__ = "intakes"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "request_type_id"],
+            ["request_types.organization_id", "request_types.id"],
+        ),
+    )
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), primary_key=True
+    )
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    kind: Mapped[str] = mapped_column(String(20))
+    slug: Mapped[str] = mapped_column(String(60), unique=True)
+    request_type_id: Mapped[str | None] = mapped_column(String(40))
+    secret_hash: Mapped[str | None] = mapped_column(String(64))
+    allowed_origin: Mapped[str | None] = mapped_column(String(240))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
+
+class RequestContext(Base):
+    __tablename__ = "request_contexts"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "ticket_id"], ["tickets.organization_id", "tickets.id"]
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "request_type_id"],
+            ["request_types.organization_id", "request_types.id"],
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "assigned_to"],
+            ["memberships.organization_id", "memberships.user_id"],
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "intake_id"], ["intakes.organization_id", "intakes.id"]
+        ),
+    )
+    organization_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    ticket_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    request_type_id: Mapped[str | None] = mapped_column(String(40))
+    assigned_to: Mapped[str | None] = mapped_column(String(40))
+    intake_id: Mapped[str | None] = mapped_column(String(40))
+    external_id: Mapped[str | None] = mapped_column(String(160))
+
+
+class UsageCounter(Base):
+    __tablename__ = "usage_counters"
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), primary_key=True
+    )
+    period: Mapped[str] = mapped_column(String(40), primary_key=True)
+    metric: Mapped[str] = mapped_column(String(40), primary_key=True)
+    value: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class Subscription(Base):
+    __tablename__ = "subscriptions"
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), primary_key=True
+    )
+    stripe_customer: Mapped[str | None] = mapped_column(String(120), unique=True)
+    stripe_subscription: Mapped[str | None] = mapped_column(String(120), unique=True)
+    plan: Mapped[str] = mapped_column(String(20), default="pilot")
+    status: Mapped[str] = mapped_column(String(30), default="pilot")
+    period_start: Mapped[int | None] = mapped_column(Integer)
+    period_end: Mapped[int | None] = mapped_column(Integer)
+    checkout_url: Mapped[str | None] = mapped_column(Text)
+    checkout_expires: Mapped[int | None] = mapped_column(Integer)
+    latest_event_at: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
+
+class WebhookReceipt(Base):
+    __tablename__ = "webhook_receipts"
+    id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
+
+class CreditReservation(Base):
+    __tablename__ = "credit_reservations"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), index=True
+    )
+    period: Mapped[str] = mapped_column(String(40))
+    reserved: Mapped[int] = mapped_column(Integer)
+    charged: Mapped[int | None] = mapped_column(Integer)
+    settled: Mapped[bool] = mapped_column(Boolean, default=False)
+    usage: Mapped[dict | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
+
+class RecoveryToken(Base):
+    __tablename__ = "recovery_tokens"
+    purpose: Mapped[str] = mapped_column(String(20))
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 def make_database(url):

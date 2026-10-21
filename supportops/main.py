@@ -15,10 +15,21 @@ from langgraph.types import Command
 from opentelemetry import trace
 from sqlalchemy import select, text, update
 from sqlalchemy.exc import IntegrityError
+from supportops.billing import billing_router, consume, reserve, settle
+from supportops.intake import (
+    intake_router,
+    validate_routing,
+    create_context,
+    context_dict,
+)
+from supportops.launch import launch_router
+from supportops.accounts import accounts_router
+from supportops.agent import build_agent_graph
 from supportops.auth import Auth, Identity, audit
 from supportops.config import Settings, settings
 from supportops.content import content_router
 from supportops.db import (
+    CreditReservation,
     Document,
     KnowledgeSource,
     Organization,
@@ -59,6 +70,7 @@ def ticket_dict(ticket):
     )
     return {
         **{key: getattr(ticket, key) for key in fields},
+        **context_dict(ticket),
         "created_at": ticket.created_at.isoformat(),
         "updated_at": ticket.updated_at.isoformat(),
     }
@@ -122,11 +134,17 @@ class RequestBodyLimit:
 
 
 def create_app(
-    config: Settings | None = None, orders_transport=None, llm_transport=None
+    config: Settings | None = None,
+    orders_transport=None,
+    llm_transport=None,
+    embedding_transport=None,
+    billing_transport=None,
 ):
     config = config or settings()
     engine, sessions = make_database(config.database_url)
     auth = Auth(config, sessions)
+    auth.embedding_transport = embedding_transport
+    auth.config = config
 
     @asynccontextmanager
     async def lifespan(app):
@@ -155,6 +173,9 @@ def create_app(
             cp.setup()
             app.state.graph = build_graph(
                 config, sessions, cp, orders_transport, llm_transport
+            )
+            app.state.agent_graph = build_agent_graph(
+                config, sessions, cp, llm_transport
             )
             app.state.sessions = sessions
             app.state.auth = auth
@@ -193,7 +214,11 @@ def create_app(
     @app.middleware("http")
     async def security_headers(request, call_next):
         origin = request.headers.get("origin")
-        if request.method not in ("GET", "HEAD", "OPTIONS") and origin:
+        if (
+            request.method not in ("GET", "HEAD", "OPTIONS")
+            and origin
+            and not request.url.path.startswith("/api/inbound/")
+        ):
             parsed = urlparse(origin)
             if (
                 parsed.netloc != request.headers.get("host")
@@ -213,10 +238,18 @@ def create_app(
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'"
         )
+        if request.url.path.startswith("/forms/") and config.turnstile_site_key:
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self' https://challenges.cloudflare.com; frame-ancestors 'none'; form-action 'self'"
+            )
         return response
 
     app.include_router(auth.router(seed_demo))
+    app.include_router(accounts_router(auth, sessions, config))
     app.include_router(content_router(auth, sessions))
+    app.include_router(billing_router(auth, sessions, config, billing_transport))
+    app.include_router(intake_router(auth, sessions, config, WEB))
+    app.include_router(launch_router(auth, sessions, config))
 
     def find(db, actor, id):
         item = db.get(Ticket, (actor.organization_id, id))
@@ -246,7 +279,12 @@ def create_app(
             "faults_enabled": config.fault_injection_enabled,
             "demo_available": config.app_env != "production"
             or config.allow_demo_signup,
-            "version": "0.2.0",
+            "agent_model": config.agent_model,
+            "embedding_model": config.embedding_model,
+            "email_delivery_enabled": bool(config.smtp_host and config.smtp_from),
+            "ai_configured": bool(config.openai_api_key or config.llm_api_key),
+            "embedding_provider": config.embedding_provider,
+            "version": "0.3.0",
             "platform": "SupportOps AI",
         }
 
@@ -269,6 +307,13 @@ def create_app(
         actor: Identity = Depends(auth.current),
     ):
         with sessions() as db:
+            validate_routing(
+                db, actor.organization_id, body.request_type_id, body.assigned_to
+            )
+            if actor.role == "agent" and body.assigned_to not in (None, actor.user_id):
+                raise HTTPException(
+                    403, "Agents may assign requests only to themselves."
+                )
             if body.template_id:
                 template = db.get(
                     ReplyTemplate, (actor.organization_id, body.template_id)
@@ -285,19 +330,35 @@ def create_app(
                     )
                 )
                 if old:
-                    if any(getattr(old, k) != v for k, v in body.model_dump().items()):
+                    if any(
+                        (
+                            getattr(old.context, k, None)
+                            if k in ("request_type_id", "assigned_to")
+                            else getattr(old, k)
+                        )
+                        != v
+                        for k, v in body.model_dump().items()
+                    ):
                         raise HTTPException(409, "idempotency_key_reused")
                     return ticket_dict(old)
+            consume(db, actor.organization_id, "requests")
             item = Ticket(
                 organization_id=actor.organization_id,
                 id="SO-" + uuid.uuid4().hex[:8].upper(),
                 created_by=actor.user_id,
-                **body.model_dump(),
+                **body.model_dump(exclude={"request_type_id", "assigned_to"}),
                 idempotency_key=idempotency_key,
             )
             db.add(item)
             try:
                 db.flush()
+                create_context(
+                    db,
+                    actor.organization_id,
+                    item.id,
+                    body.request_type_id,
+                    body.assigned_to,
+                )
                 audit(db, actor, "ticket.created", {"ticket_id": item.id})
                 db.commit()
             except IntegrityError:
@@ -313,7 +374,13 @@ def create_app(
                     else None
                 )
                 if old and all(
-                    getattr(old, k) == v for k, v in body.model_dump().items()
+                    (
+                        getattr(old.context, k, None)
+                        if k in ("request_type_id", "assigned_to")
+                        else getattr(old, k)
+                    )
+                    == v
+                    for k, v in body.model_dump().items()
                 ):
                     return ticket_dict(old)
                 raise HTTPException(409, "idempotency_conflict")
@@ -348,6 +415,8 @@ def create_app(
 
     @app.post("/api/tickets/{id}/analyze")
     def analyze(id: str, body: AnalyzeInput, actor: Identity = Depends(auth.current)):
+        if not actor.organization["is_demo"]:
+            auth.ensure_verified(actor)
         if body.fault != "none" and (
             not config.fault_injection_enabled or not actor.organization["is_demo"]
         ):
@@ -360,8 +429,16 @@ def create_app(
                 return ticket_dict(t)
             if t.status == "processing" and t.updated_at.replace(
                 tzinfo=timezone.utc
-            ) > utcnow() - timedelta(seconds=90):
+            ) > utcnow() - timedelta(
+                seconds=max(90, config.agent_timeout_seconds + 30)
+            ):
                 raise HTTPException(409, "analysis_in_progress")
+            reservation_id = (
+                reserve(db, config, actor.organization_id)
+                if actor.organization["workflow_mode"] == "knowledge"
+                and config.model_provider == "openai"
+                else None
+            )
             if not db.execute(
                 update(Ticket)
                 .where(
@@ -378,6 +455,10 @@ def create_app(
             db.refresh(t)
             thread = f"{actor.organization_id}:{id}:{t.revision}"
             initial = {
+                "credit_budget_usd": db.get(CreditReservation, reservation_id).reserved
+                * 0.005
+                if reservation_id
+                else config.agent_provider_cost_limit,
                 "organization_id": actor.organization_id,
                 "business_name": actor.organization["name"],
                 "workflow_mode": actor.organization["workflow_mode"],
@@ -407,7 +488,13 @@ def create_app(
                     initial["trace_id"] = format(
                         span.get_span_context().trace_id, "032x"
                     )
-                    result = app.state.graph.invoke(
+                    graph = (
+                        app.state.agent_graph
+                        if actor.organization["workflow_mode"] == "knowledge"
+                        and config.model_provider == "openai"
+                        else app.state.graph
+                    )
+                    result = graph.invoke(
                         initial, config={"configurable": {"thread_id": thread}}
                     )
                 for key in ("__interrupt__", "message", "customer"):
@@ -441,6 +528,15 @@ def create_app(
                 {"ticket_id": id, "status": t.status, "reason": t.result.get("reason")},
             )
             db.commit()
+            settle(
+                sessions,
+                reservation_id,
+                (t.result or {}).get("usage", {}),
+                uncertain=bool(
+                    (t.result or {}).get("usage", {}).get("uncertain")
+                    or (t.result or {}).get("reason") == "workflow_failed"
+                ),
+            )
             return ticket_dict(t)
 
     @app.post("/api/tickets/{id}/review")
@@ -473,11 +569,15 @@ def create_app(
                 ):
                     raise HTTPException(409, "Workflow workspace mismatch.")
                 graph_config = {"configurable": {"thread_id": thread}}
-                snapshot = app.state.graph.get_state(graph_config)
+                graph = (
+                    app.state.agent_graph
+                    if (t.result or {}).get("manifest", {}).get("engine")
+                    == "openai-agent-v1"
+                    else app.state.graph
+                )
+                snapshot = graph.get_state(graph_config)
                 if snapshot.next:
-                    app.state.graph.invoke(
-                        Command(resume=body.model_dump()), config=graph_config
-                    )
+                    graph.invoke(Command(resume=body.model_dump()), config=graph_config)
                 elif snapshot.values.get("review") != body.model_dump():
                     raise HTTPException(409, "checkpoint_review_conflict")
             db.add(

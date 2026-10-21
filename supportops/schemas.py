@@ -14,8 +14,10 @@ class TicketInput(BaseModel):
     subject: str = Field(min_length=3, max_length=180)
     message: str = Field(min_length=10, max_length=5000)
     order_id: str | None = Field(default=None, pattern=r"^\d{4,12}$")
-    channel: Literal["email", "chat", "web"] = "email"
+    channel: Literal["email", "chat", "web", "api", "internal"] = "email"
     priority: Literal["normal", "high"] = "normal"
+    request_type_id: str | None = Field(default=None, max_length=40)
+    assigned_to: str | None = Field(default=None, max_length=40)
     template_id: str | None = Field(default=None, max_length=40)
 
 

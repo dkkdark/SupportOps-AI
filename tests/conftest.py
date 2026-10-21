@@ -9,6 +9,13 @@ from supportops.config import Settings
 from supportops.main import create_app
 
 
+@pytest.fixture(autouse=True)
+def offline_defaults(monkeypatch):
+    # Never make billable calls from the ordinary test suite.
+    monkeypatch.setenv("MODEL_PROVIDER", "baseline")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "baseline")
+
+
 @pytest.fixture
 def orders():
     data = json.loads(Path("data/orders.json").read_text())

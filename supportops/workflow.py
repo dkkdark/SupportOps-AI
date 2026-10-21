@@ -54,6 +54,13 @@ class State(TypedDict, total=False):
     selection: dict
     usage: dict
     manifest: dict
+    tool_calls: list[dict]
+    answer_blocks: list[dict]
+    summary: str
+    verifier: dict | None
+    credit_budget_usd: float
+    embedding_profile: str
+    handoff_reason: str
     review: dict
 
 
@@ -339,7 +346,10 @@ def build_graph(
                 try:
                     if s.get("fault") == "invalid_model":
                         raw = {"fact_ids": ["invented_refund"], "tone": "neutral"}
-                    elif settings.model_provider == "baseline":
+                    elif settings.model_provider == "baseline" or (
+                        settings.model_provider == "openai"
+                        and s.get("workflow_mode") == "retail_demo"
+                    ):
                         raw = {"fact_ids": s["required"], "tone": "empathetic"}
                     elif settings.model_provider == "openai_compatible":
                         if not settings.llm_api_key or not settings.llm_model:
