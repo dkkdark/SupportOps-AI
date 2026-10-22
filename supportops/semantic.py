@@ -29,9 +29,10 @@ def legacy_profile(config):
 
 
 def profile(config):
-    # A new target never inherits another Qdrant instance's SQL readiness state.
+    # Keep snapshots portable across hostnames. Missing remote data fails closed
+    # at retrieval; a physical server address is not an embedding-model profile.
     return hashlib.sha256(
-        f"{legacy_profile(config)}:qdrant-v1:{config.qdrant_url.rstrip('/')}:{config.qdrant_collection}".encode()
+        f"{legacy_profile(config)}:qdrant-v1:{config.qdrant_collection}".encode()
     ).hexdigest()
 
 
@@ -363,6 +364,7 @@ def search(db, config, client, org_id, query, limit=6, vector_transport=None):
         if (
             not point
             or row.text_hash != text_hash(d)
+            or point["payload"].get("document_id") != d.id
             or point["payload"].get("text_hash") != row.text_hash
         ):
             continue

@@ -43,6 +43,8 @@ class PrivacyInput(BaseModel):
 
 
 def operations_router(auth, sessions, config):
+    from supportops.semantic import profile
+
     router = APIRouter(prefix="/api")
 
     @router.get("/operations/status")
@@ -51,7 +53,10 @@ def operations_router(auth, sessions, config):
             indexes = dict(
                 db.execute(
                     select(IndexJob.status, func.count())
-                    .where(IndexJob.organization_id == actor.organization_id)
+                    .where(
+                        IndexJob.organization_id == actor.organization_id,
+                        IndexJob.profile == profile(config),
+                    )
                     .group_by(IndexJob.status)
                 ).all()
             )

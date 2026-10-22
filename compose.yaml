@@ -1,4 +1,10 @@
 services:
+  qdrant:
+    image: qdrant/qdrant:v1.19.0
+    volumes:
+      - qdrant:/qdrant/storage
+    # Private service: no host ports, never expose the database to the Internet.
+    restart: unless-stopped
   db:
     image: pgvector/pgvector:pg17
     environment:
@@ -46,6 +52,8 @@ services:
       AGENT_MODEL: ${AGENT_MODEL:-gpt-5.4-mini}
       VERIFIER_MODEL: ${VERIFIER_MODEL:-gpt-5.4-mini}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-large}
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-supportops}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://127.0.0.1:8010}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
@@ -75,6 +83,8 @@ services:
         condition: service_completed_successfully
       orders:
         condition: service_healthy
+      qdrant:
+        condition: service_started
     restart: unless-stopped
   indexer:
     build: .
@@ -84,6 +94,8 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      qdrant:
+        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-m", "scripts.worker_health"]
       interval: 30s
@@ -93,3 +105,4 @@ services:
     restart: unless-stopped
 volumes:
   postgres:
+  qdrant:

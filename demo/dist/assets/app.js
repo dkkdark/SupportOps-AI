@@ -58,6 +58,13 @@ const reasonNames = {
   invalid_model_output: 'The model returned invalid output twice. The draft has been blocked.',
   model_unavailable: 'The model provider is unavailable. Retry analysis later.',
   model_not_configured: 'The model or API key is missing. Check the server configuration.',
+  vector_store_unavailable:
+    'Knowledge search is temporarily unavailable. Your request is saved; retry when the service recovers.',
+  vector_store_auth_failed: 'Knowledge search needs an access check by the service operator.',
+  vector_index_missing:
+    'The knowledge index needs to be restored or rebuilt. Ask an admin to check indexing before retrying.',
+  vector_store_profile_mismatch:
+    'The knowledge index configuration does not match the selected embedding model.',
   damage_requires_review: 'Damaged items require a review of photographs and an agent’s decision.',
   payment_requires_review:
     'Payment details must be checked in the payment system. Order data alone is insufficient.',
@@ -1519,7 +1526,7 @@ document.addEventListener('click', async (e) => {
         modal(
           'About this demo',
           'An interactive workflow using synthetic data.',
-          `<div class="modal-prose">Create requests, prepare replies, inspect sources, edit text and save review decisions.<br><br>All changes stay in your browser. No external LLM or AWS services are connected. Latency and time savings are not simulated.<br><br>The full project includes FastAPI, LangGraph, PostgreSQL / pgvector, evaluation, Docker, CI/CD and AWS configuration.</div>`,
+          `<div class="modal-prose">Create requests, prepare replies, inspect sources, edit text and save review decisions.<br><br>All changes stay in your browser. No external LLM or AWS services are connected. Latency and time savings are not simulated.<br><br>The full project includes FastAPI, LangGraph, SQL business records, Qdrant vector search, evaluation, Docker, CI/CD and AWS configuration.</div>`,
         );
         break;
       case 'eval-info':

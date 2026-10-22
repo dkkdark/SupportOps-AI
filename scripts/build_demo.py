@@ -8,6 +8,9 @@ from pathlib import Path
 import httpx
 from fastapi.testclient import TestClient
 from supportops.config import Settings
+
+# Build synthetic assets without opening the operator's credentials file.
+Settings.model_config["env_file"] = None
 from supportops.main import create_app
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,7 +44,16 @@ def build():
     with tempfile.TemporaryDirectory() as tmp:
         with TestClient(
             create_app(
-                Settings(database_url=f"sqlite:///{tmp}/demo.db"),
+                Settings(
+                    _env_file=None,
+                    app_env="test",
+                    database_url=f"sqlite:///{tmp}/demo.db",
+                    model_provider="baseline",
+                    embedding_provider="baseline",
+                    openai_api_key="",
+                    llm_api_key="",
+                    smtp_host="",
+                ),
                 orders_transport=httpx.MockTransport(handle),
             )
         ) as c:

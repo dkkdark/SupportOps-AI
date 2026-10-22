@@ -32,6 +32,8 @@ locals {
     { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = var.otel_image == "" ? "" : "http://127.0.0.1:4318" },
     { name = "EMBEDDING_PROVIDER", value = "openai" },
     { name = "EMBEDDING_MODEL", value = var.embedding_model },
+    { name = "QDRANT_URL", value = var.qdrant_url },
+    { name = "QDRANT_COLLECTION", value = "supportops" },
     { name = "PUBLIC_BASE_URL", value = var.public_base_url },
     { name = "STRIPE_STARTER_PRICE_ID", value = var.stripe_starter_price_id },
     { name = "STRIPE_GROWTH_PRICE_ID", value = var.stripe_growth_price_id },
@@ -48,7 +50,7 @@ locals {
     { name = "STRIPE_AUTOMATIC_TAX", value = tostring(var.stripe_automatic_tax) },
     { name = "CODE_VERSION", value = var.image_digest }
   ]
-  app_secrets = concat([{ name = "DB_PASSWORD", valueFrom = "${aws_db_instance.main.master_user_secret[0].secret_arn}:password::" }], var.llm_secret_arn == "" ? [] : [{ name = "OPENAI_API_KEY", valueFrom = var.llm_secret_arn }], var.stripe_secret_arn == "" ? [] : [{ name = "STRIPE_SECRET_KEY", valueFrom = var.stripe_secret_arn }], var.stripe_webhook_secret_arn == "" ? [] : [{ name = "STRIPE_WEBHOOK_SECRET", valueFrom = var.stripe_webhook_secret_arn }], var.smtp_password_secret_arn == "" ? [] : [{ name = "SMTP_PASSWORD", valueFrom = var.smtp_password_secret_arn }], var.turnstile_secret_arn == "" ? [] : [{ name = "TURNSTILE_SECRET_KEY", valueFrom = var.turnstile_secret_arn }])
+  app_secrets = concat([{ name = "DB_PASSWORD", valueFrom = "${aws_db_instance.main.master_user_secret[0].secret_arn}:password::" }], var.llm_secret_arn == "" ? [] : [{ name = "OPENAI_API_KEY", valueFrom = var.llm_secret_arn }], var.stripe_secret_arn == "" ? [] : [{ name = "STRIPE_SECRET_KEY", valueFrom = var.stripe_secret_arn }], var.stripe_webhook_secret_arn == "" ? [] : [{ name = "STRIPE_WEBHOOK_SECRET", valueFrom = var.stripe_webhook_secret_arn }], var.smtp_password_secret_arn == "" ? [] : [{ name = "SMTP_PASSWORD", valueFrom = var.smtp_password_secret_arn }], var.turnstile_secret_arn == "" ? [] : [{ name = "TURNSTILE_SECRET_KEY", valueFrom = var.turnstile_secret_arn }], var.qdrant_api_key_secret_arn == "" ? [] : [{ name = "QDRANT_API_KEY", valueFrom = var.qdrant_api_key_secret_arn }])
   app_image   = var.image_digest == "" ? "${aws_ecr_repository.app.repository_url}:bootstrap" : "${aws_ecr_repository.app.repository_url}@${var.image_digest}"
   log_config  = { logDriver = "awslogs", options = { awslogs-group = aws_cloudwatch_log_group.app.name, awslogs-region = var.region, awslogs-stream-prefix = "ecs" } }
   collector_config = yamlencode({
@@ -176,6 +178,10 @@ resource "aws_ecs_service" "app" {
   depends_on = [aws_lb_listener.https, aws_iam_role_policy.secrets]
   lifecycle {
     ignore_changes = [task_definition]
+    precondition {
+      condition     = var.desired_count == 0 || startswith(var.qdrant_url, "https://")
+      error_message = "Configure a durable HTTPS Qdrant endpoint before starting tasks."
+    }
     precondition {
       condition     = var.desired_count == 0 || can(regex("^sha256:[a-f0-9]{64}$", var.image_digest))
       error_message = "Set a verified ECR image digest before starting tasks."

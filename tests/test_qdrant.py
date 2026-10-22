@@ -123,14 +123,23 @@ def test_legacy_vectors_transfer_without_paid_calls(ai_client, vector_service):
         assert db.get(IndexJob, (org, source["id"], profile(target))).status == "ready"
     assert len(models.calls) == before
 
+    # Operator transfer is dry-run by default and repairs a restored-empty store.
+    from scripts.transfer_vectors import transfer
 
-def test_collection_target_is_part_of_profile_and_missing_store_fails_closed(
+    assert transfer(cfg, c.app.state.sessions)["transferred_sources"] == 0
+    vector_service.collections.clear()
+    summary = transfer(cfg, c.app.state.sessions, apply=True)
+    assert summary["transferred_sources"] == 1 and summary["model_calls"] == 0
+    assert len(models.calls) == before
+
+
+def test_collection_namespace_is_scoped_snapshots_are_portable_and_missing_store_fails_closed(
     ai_client, vector_service
 ):
     c, _ = ai_client
     publish(c)
     cfg = c.app.state.auth.config
-    assert profile(cfg) != profile(
+    assert profile(cfg) == profile(
         cfg.model_copy(update={"qdrant_url": "http://other:6333"})
     )
     assert profile(cfg) != profile(

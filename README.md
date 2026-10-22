@@ -15,6 +15,7 @@ pip install -r requirements.lock
 pip install --no-deps -e .
 cp .env.example .env
 # Set OPENAI_API_KEY in the server environment or ignored .env.
+docker compose --env-file /dev/null -f compose.qdrant.yaml up -d
 python -m scripts.dev
 ```
 
@@ -31,7 +32,7 @@ Default business configuration:
 | Agent | `gpt-5.4-mini`, OpenAI Responses API, bounded tool-calling loop |
 | Grounding reviewer | Separate fresh model call with a strict structured verdict |
 | Embeddings | `text-embedding-3-large`, real 1536-dimensional vectors |
-| Search | Tenant/profile-scoped pgvector cosine search, lexical ranking and maximal marginal relevance |
+| Search | Tenant/profile-scoped Qdrant cosine search with SQL evidence checks, lexical ranking and maximal marginal relevance |
 | Documents | Selectable-text PDF, DOCX, TXT, Markdown and JSON; immutable versions and effective dates |
 | Indexing | Durable database jobs, immediate background processing, separate restartable worker and retry endpoint |
 | Evidence | Paragraph-level citations, current-source rechecks and saved model/document/template versions |
@@ -91,13 +92,13 @@ npm run check:format
 A real OpenAI acceptance test passed for an internal travel-expense question: document embedding → semantic search tool → generated policy explanation → separate grounding check → saved human approval. Its agent/query/review calls cost approximately **$0.00354 in that one run**, excluding initial document indexing. This is not an average-cost or production-accuracy benchmark. Controlled tests additionally cover bad citations, model rejection, indexing failures/retry, tenant boundaries, inbound channels, quotas, Stripe signatures/lifecycle and recovery tokens.
 
 ```bash
-# A full local pgvector stack; configure .env first.
+# A full local PostgreSQL + Qdrant stack; configure .env first.
 docker compose up --build -d
 # A separate indexing worker is included.
 docker compose down
 ```
 
-The current machine’s Docker daemon is unavailable; local PostgreSQL/container execution remains unverified and is included in CI. Terraform schema validation, Helm rendering/lint and Compose configuration checks are available. AWS and Kubernetes have not been deployed. Start real pilots and validate representative business requests before public expansion.
+Real local Qdrant and PostgreSQL integrations have passed, including the agent workflow with controlled model responses. See [Qdrant setup and migration](docs/qdrant.ru.md). Terraform schema validation, Helm rendering/lint and Compose configuration checks are available. AWS and Kubernetes have not been deployed. Start real pilots and validate representative business requests before public expansion.
 
 ## Gmail sender
 
@@ -107,7 +108,7 @@ The configured sender/contact is `info.xenonimus@gmail.com`. Server-side STARTTL
 
 Durable account-mail delivery, worker heartbeat/retries, technical retention, private account export/deletion requests, AI-charge reconciliation and isolated SQLite restore drills are implemented. Commands and external launch prerequisites: [backend operations — Russian](docs/backend-operations.ru.md). Production startup checks the schema; `python -m scripts.migrate` initializes both application and checkpoint tables.
 
-- SQLite quick start; private PostgreSQL/pgvector and persisted checkpoints for deployment.
+- SQLite quick start; private PostgreSQL for business records/checkpoints and separate Qdrant for semantic vectors in deployment. Historical migrations still require the vector extension; new semantic indexing does not write SQL vectors.
 - Terraform: HTTPS ALB, Fargate application/indexer, RDS, ECR, Secrets Manager, CloudWatch, optional telemetry and scoped GitHub OIDC.
 - Helm and Compose include a durable indexing worker. Failed/interrupted jobs can be retried safely.
 - Production smoke uses a pre-verified account through `SMOKE_EMAIL` / `SMOKE_PASSWORD`; it never bypasses email verification.

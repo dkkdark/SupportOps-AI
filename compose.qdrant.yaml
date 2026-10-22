@@ -1,0 +1,11 @@
+# Standalone local vector server. No .env interpolation or external API calls.
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.19.0
+    ports:
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - qdrant:/qdrant/storage
+    restart: unless-stopped
+volumes:
+  qdrant:

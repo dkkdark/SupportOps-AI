@@ -22,3 +22,7 @@ smtp_user = "info.xenonimus@gmail.com"
 smtp_from = "SupportOps AI <info.xenonimus@gmail.com>"
 legal_contact_email = "info.xenonimus@gmail.com"
 # smtp_password_secret_arn = "arn:aws:secretsmanager:REGION:ACCOUNT:secret:gmail-app-password-..."
+
+# Qdrant is external to the Fargate task; provision durable storage separately.
+qdrant_url = "https://REPLACE-WITH-PRIVATE-QDRANT-ENDPOINT.example"
+qdrant_api_key_secret_arn = ""

@@ -28,7 +28,7 @@
 
 - Собственный OpenAI API project/key с доступом к указанным моделям. Ключ хранится только на сервере. Настрой уведомления о расходах и регулярно сверяй цены.
 - Stripe-аккаунт, доступный твоему бизнесу, платёжные/налоговые реквизиты и счёт для выплат.
-- Домен и управление DNS, AWS-аккаунт либо другой сервер с PostgreSQL/pgvector и HTTPS.
+- Домен и управление DNS, AWS-аккаунт либо другой сервер с PostgreSQL для бизнес-данных, Qdrant для векторов и HTTPS.
 - SMTP-провайдер с подтверждённым отправителем для писем верификации и восстановления.
 - Cloudflare Turnstile site/secret keys для домена.
 - Название оператора, контактный email и проверенные юридические документы для целевой географии.
@@ -99,7 +99,7 @@ LEGAL_DOCUMENTS_APPROVED=true
 
 ## 6. Развернуть staging с HTTPS и PostgreSQL
 
-Следуй `docs/deployment.md`. Для AWS нужны сертификат ACM, DNS, private RDS/pgvector, Secrets Manager и окружение GitHub staging. Укажи реальный `PUBLIC_BASE_URL=https://...`.
+Следуй `docs/deployment.md`. Для AWS нужны сертификат ACM, DNS, private RDS, отдельный Qdrant, Secrets Manager и окружение GitHub staging. Укажи реальный `PUBLIC_BASE_URL=https://...`.
 
 Для самого первого GitHub deploy используй `bootstrap=true`: он проверяет только доступность страницы и БД. Затем зарегистрируй свой аккаунт по HTTPS, подтверди email, добавь `SMOKE_EMAIL` / `SMOKE_PASSWORD` в staging secrets и повтори deploy с `bootstrap=false` для полного сценария. Bootstrap не считается готовностью принимать оплату.
 

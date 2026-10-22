@@ -44,6 +44,7 @@ def main():
         checks.update(
             openai=bool(config.model_provider == "openai" and (config.openai_api_key or config.llm_api_key)),
             real_embeddings=config.embedding_provider == "openai",
+            vector_store_configured=bool(config.qdrant_url),
             email=mail["ready"],
             demo_budget=bool(config.demo_release and config.demo_ai_budget_usd == 5),
         )

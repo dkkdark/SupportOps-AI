@@ -45,6 +45,7 @@ EMBEDDING_INPUT_USD_PER_MILLION=0.13
 Сделай согласованную копию приложения и checkpoint-БД. Затем в активированном `.venv`:
 
 ```bash
+docker compose --env-file /dev/null -f compose.qdrant.yaml up -d
 python -m scripts.migrate
 python -m scripts.live_acceptance
 ```
@@ -101,7 +102,7 @@ Site key показывается браузеру, secret key остаётся 
 
 ## 6. Подключить сервер и PostgreSQL
 
-Для публичной демо-версии задай `APP_ENV=production`, HTTPS-домен в `PUBLIC_BASE_URL`, PostgreSQL/pgvector и постоянное хранение checkpoints. API и index-worker должны использовать одинаковую БД и настройки моделей.
+Для публичной демо-версии задай `APP_ENV=production`, HTTPS-домен в `PUBLIC_BASE_URL`, PostgreSQL для бизнес-данных, отдельный Qdrant для векторов и постоянное хранение checkpoints. API и index-worker должны использовать одинаковую БД и настройки моделей.
 
 Для AWS уже подготовлен Terraform: сертификат ACM, ALB, Fargate, RDS, Secrets Manager и deployment workflow описаны в [deployment.md](deployment.md). Укажи ARN серверного OpenAI-ключа в `llm_secret_arn`, SMTP/Turnstile secret ARNs и публичные настройки. Текущая AWS-конфигурация явно сохраняет демо-режим и лимит $5. Не включай Stripe и не меняй `DEMO_RELEASE` для этого запуска.
 
@@ -137,3 +138,5 @@ python -m scripts.demo_waitlist --output var/launch-notifications.csv
 ```
 
 Команда создаёт новый локальный CSV и **не отправляет письма**. Файл содержит персональные данные; хранить его нужно в закрытом операторском окружении, вне Git. После будущей реальной отправки отметь `launch_email_sent_at` в рамках учёта рассылки. Не выставляй дату отправки заранее.
+
+Настройка Qdrant и перенос старых embeddings без новых вызовов OpenAI: [qdrant.ru.md](qdrant.ru.md).

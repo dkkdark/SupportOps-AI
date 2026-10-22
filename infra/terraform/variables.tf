@@ -79,6 +79,18 @@ variable "embedding_model" {
   default = "text-embedding-3-large"
 }
 
+variable "qdrant_url" {
+  type        = string
+  default     = ""
+  description = "HTTPS Qdrant endpoint reachable from Fargate. Supply a durable private/managed server separately."
+}
+
+variable "qdrant_api_key_secret_arn" {
+  type        = string
+  default     = ""
+  description = "Secrets Manager ARN holding the Qdrant API key. Never put the key in tfvars."
+}
+
 variable "stripe_secret_arn" {
   type    = string
   default = ""

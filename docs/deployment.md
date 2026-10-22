@@ -29,7 +29,7 @@ The initial blueprint uses the RDS provisioning account for application tables/c
 
 ## GitHub delivery
 
-`ci.yml` runs tests against real PostgreSQL/pgvector, baseline dev and holdout evaluation, JavaScript syntax checks, a container build, Compose smoke tests, Terraform validation and Helm checks. It uses controlled external responses for repeatability.
+`ci.yml` runs tests against real PostgreSQL and Qdrant, baseline dev and holdout evaluation, JavaScript syntax checks, a container build, Compose smoke tests, Terraform validation and Helm checks. It uses controlled external responses for repeatability.
 
 `deploy.yml` runs **only via manual workflow dispatch** and uses the GitHub `staging` environment. Protect that environment and restrict allowed branches in GitHub. OIDC trust is bound to the exact repository and environment; no permanent AWS key is required. If the AWS account already has GitHub’s OIDC provider, keep `create_github_oidc_provider=false`; otherwise create it once.
 
@@ -45,7 +45,7 @@ Configure these staging **variables** from Terraform outputs:
 | `ARTIFACTS_BUCKET` | S3 bucket output |
 | `AGENT_MODEL` / `VERIFIER_MODEL` / `OPENAI_BASE_URL` | Optional live acceptance overrides; defaults use official OpenAI endpoints and gpt-5.4-mini |
 
-Configure `OPENAI_API_KEY` as a staging secret for optional bounded real-agent acceptance. Runtime credentials are separate Secrets Manager ARNs: `llm_secret_arn`, Stripe secret/webhook ARNs, SMTP password ARN and Turnstile secret ARN. Set the public HTTPS URL, embedding/agent models, matching token prices, SMTP sender, Turnstile site key and reviewed legal URLs in Terraform variables. Stripe configuration is for a future paid release; leave it empty for the current demo. The task explicitly uses DEMO_RELEASE=true with a $5 account allowance. The example documents those fields. The task runs the application and a durable index worker; it does not run the synthetic orders service. A telemetry collector is optional.
+Configure `OPENAI_API_KEY` as a staging secret for optional bounded real-agent acceptance. A durable external Qdrant is required: configure `qdrant_url` and `qdrant_api_key_secret_arn`. Terraform passes the URL/key to the app and worker but does not provision the vector server; include its storage, backups and cost separately. Do not run Qdrant on a Fargate ephemeral volume. Runtime credentials are separate Secrets Manager ARNs: `llm_secret_arn`, Stripe secret/webhook ARNs, SMTP password ARN and Turnstile secret ARN. Set the public HTTPS URL, embedding/agent models, matching token prices, SMTP sender, Turnstile site key and reviewed legal URLs in Terraform variables. Stripe configuration is for a future paid release; leave it empty for the current demo. The task explicitly uses DEMO_RELEASE=true with a $5 account allowance. The example documents those fields. The task runs the application and a durable index worker; it does not run the synthetic orders service. A telemetry collector is optional.
 
 For the very first deployment only, dispatch with `bootstrap=true`: this verifies the landing page and database readiness without requiring a nonexistent verified account. This is **not authenticated acceptance**. Register an operator-owned account on the resulting HTTPS service, confirm its email, and set `SMOKE_EMAIL` / `SMOKE_PASSWORD` as protected staging secrets. Then repeat with `bootstrap=false` (the default) for the full authenticated smoke. Subsequent releases require those secrets. Do not use the bootstrap option to skip acceptance of a public paid launch.
 
@@ -73,7 +73,7 @@ Review the destroy plan. Production RDS deletion protection must be deliberately
 
 ## Optional Kubernetes / kind
 
-The Helm chart deploys the API and index-worker with an **external PostgreSQL/pgvector** database. The optional synthetic orders sidecar is disabled by default (`includeDemoOrders=false`). Enable it only for isolated development samples. No EKS cluster is provisioned.
+The Helm chart deploys the API and index-worker with an **external PostgreSQL** business database and **external Qdrant** vector server. Historical SQL migrations require pgvector; live semantic search uses Qdrant. Configure `QDRANT_URL` and `QDRANT_API_KEY` in the existing Secret. The optional synthetic orders sidecar is disabled by default (`includeDemoOrders=false`). Enable it only for isolated development samples. No EKS cluster is provisioned.
 
 ```bash
 kind create cluster --name supportops
@@ -101,3 +101,7 @@ kind delete cluster --name supportops
 ```
 
 The chart is a local deployment alternative. An EKS rollout needs ingress/TLS, workload identity, external secrets, managed storage, policy controls and its own cost/operations review.
+
+## Qdrant migration and backups
+
+See [Qdrant operations](qdrant.ru.md). Migration 006 retains old vectors and creates an evidence registry. Stop app/worker, back up SQL/checkpoints, migrate and transfer cached vectors with `python -m scripts.transfer_vectors --apply --confirm-stopped`; this command never calls OpenAI. Sources without complete cached embeddings need an explicit owner-triggered paid reindex. Qdrant snapshots/storage must be backed up separately; test their restore alongside SQL. Health is available at `/health/vector`.

@@ -1,12 +1,14 @@
 PYTHON ?= .venv/bin/python
 
-.PHONY: install dev worker check test eval demo up down smoke
+.PHONY: install dev worker check test eval demo up down smoke vectors
 install:
 	python3.13 -m venv .venv
 	$(PYTHON) -m pip install -r requirements.lock
 	$(PYTHON) -m pip install --no-deps -e .
 dev:
 	$(PYTHON) -m scripts.dev
+vectors:
+	docker compose --env-file /dev/null -f compose.qdrant.yaml up -d
 test:
 	$(PYTHON) -m pytest
 eval:
