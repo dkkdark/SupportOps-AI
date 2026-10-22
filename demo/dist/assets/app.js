@@ -1669,7 +1669,7 @@ python -m eval.run --split holdout --live</pre><p class="modal-prose">Dev and ho
         modal(
           'Recover from a failure',
           'Practical steps for diagnosis and recovery.',
-          `<div class="modal-prose"><b>1. Orders API unavailable</b><br>Check the orders service at /health/live, connectivity and ORDERS_API_URL. Restore the service, then select Retry analysis.<br><br><b>2. Invalid model output</b><br>Inspect the trace and manifest. Check the prompt version and schema. After two invalid attempts, the ticket goes to an agent.<br><br><b>3. Failed release</b><br>AI Guard blocks regressions. The ECS circuit breaker rolls back unhealthy deployments. Content failures require a return to a verified image digest.<br><br>Full commands and recovery checks are in docs/runbook.md.</div>`,
+          `<div class="modal-prose"><b>1. Orders API unavailable</b><br>Check the orders service at /health/live, connectivity and ORDERS_API_URL. Restore the service, then select Retry analysis.<br><br><b>2. Invalid model output</b><br>Inspect the trace and manifest. Check the prompt version and schema. After two invalid attempts, the ticket goes to an agent.<br><br><b>3. Failed release</b><br>AI Guard blocks regressions. The ECS circuit breaker rolls back unhealthy deployments. Content failures require a return to a verified image digest.</div>`,
           true,
         );
         break;

@@ -1,6 +1,6 @@
 # Subscription unit economics
 
-> Future paid-launch planning only. The current demo hides pricing and disables payments, with a one-time $5 AI allowance per user account. See [current API setup](api-setup.md).
+> Future paid-launch planning only. The current demo hides pricing and disables payments, with a one-time $5 AI allowance per user account.
 
 The published plans charge per business workspace. They include bounded AI usage rather than unlimited model calls. Prices/limits are implemented in `supportops/billing.py`; plan IDs and payment amounts are validated server-side.
 
@@ -12,7 +12,7 @@ The published plans charge per business workspace. They include bounded AI usage
 
 The internal cost unit is $0.005 per credit. Actual recorded provider cost is rounded up to credits, including document indexing, query embeddings, agent turns and verification. This puts a bound on included model expense at the **configured** token rates. The default per-run provider budget is $0.40; reservations prevent concurrent work from exceeding a business’s credit allowance. Unknown charges are retained for reconciliation. No automatic overages, purchases or top-ups occur.
 
-These are contribution amounts before hosting, payment fees, tax treatment, support, acquisition, refunds and other operating costs. They are not profit or a profitability guarantee. Rates must be updated when models or provider prices change.
+These are contribution amounts before hosting, payment fees, tax treatment, support, acquisition, refunds and other operating costs. They are not profit or a profitability guarantee. The estimates depend on the configured model and provider token rates.
 
 ## Current model-rate assumptions
 
@@ -34,7 +34,7 @@ Contribution = subscription revenue − actual AI cost − variable costs
 Break-even businesses = ceiling(fixed costs / average contribution per business)
 ```
 
-At the full Starter AI allowance, the simplified contribution is $44, so $150 / $44 rounds up to 4 businesses. That calculation excludes every other variable cost and must not be used as a final launch budget. Price the actual cloud configuration in the [AWS calculator](https://calculator.aws/), inspect your Stripe account’s applicable fees, and measure support/acquisition costs in the first pilot.
+At the full Starter AI allowance, the simplified contribution is $44, so $150 / $44 rounds up to 4 businesses. That calculation excludes every other variable cost and must not be used as a final launch budget. Actual infrastructure, payment fees, support and acquisition costs are excluded from this simplified scenario.
 
 ## Limits that protect the business
 
@@ -47,4 +47,4 @@ At the full Starter AI allowance, the simplified contribution is $44, so $150 / 
 - Subscription entitlements come from verified Stripe events and paid-period dates.
 - Changing a plan or renewing a period cannot silently create unlimited credits.
 
-Review weekly during pilot: revenue, AI cost, credit reservations awaiting reconciliation, hosting, active companies/seats, retained customers, support time and acquisition cost. Adjust published plans only after reviewing the effect on existing subscriptions and operator terms.
+Pilot economics depend on revenue, AI costs, unsettled reservations, hosting, active businesses/seats, retention, support time and acquisition costs. The subscription figures are planning assumptions rather than validated pilot results.
