@@ -1,0 +1,25 @@
+{
+	email info.xenonimus@gmail.com
+}
+
+{$APP_DOMAIN} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	@internal path /health/ready /health/vector /health/worker /docs /docs/* /redoc /redoc/* /openapi.json
+	respond @internal 404
+
+	reverse_proxy app:8000 {
+		# Public clients cannot choose their address or scheme for auth throttles.
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up -Forwarded
+		transport http {
+			dial_timeout 5s
+			response_header_timeout 240s
+		}
+	}
+}
