@@ -1,0 +1,24 @@
+# Enable metered models while the site remains private behind its SSH tunnel.
+x-ai-environment: &ai-environment
+  MODEL_PROVIDER: openai
+  EMBEDDING_PROVIDER: openai
+  OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY in the server environment file}
+  OPENAI_BASE_URL: https://api.openai.com/v1
+  AGENT_MODEL: gpt-5.4-mini
+  VERIFIER_MODEL: gpt-5.4-mini
+  EMBEDDING_MODEL: text-embedding-3-large
+  MODEL_INPUT_USD_PER_MILLION: "0.75"
+  MODEL_OUTPUT_USD_PER_MILLION: "4.50"
+  VERIFIER_INPUT_USD_PER_MILLION: "0.75"
+  VERIFIER_OUTPUT_USD_PER_MILLION: "4.50"
+  EMBEDDING_INPUT_USD_PER_MILLION: "0.13"
+
+services:
+  app:
+    environment: *ai-environment
+
+  worker:
+    environment: *ai-environment
+    networks:
+      - private
+      - access

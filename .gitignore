@@ -7,6 +7,8 @@ __pycache__/
 htmlcov/
 .env
 .env.k8s
+.env.vps*
+!.env.vps.example
 var/
 reports/
 *.db*
