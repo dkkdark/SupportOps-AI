@@ -50,6 +50,13 @@ jobs:
         run: python -m eval.run --split holdout
       - name: Validate browser JavaScript
         run: for file in supportops/web/*.js; do node --check "$file"; done
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Frontend regression tests and formatting
+        run: npm test && npm run check:format
       - name: Validate Compose contract and build image
         run: docker compose config --quiet && docker build -t supportops:ci .
       - name: Container smoke test

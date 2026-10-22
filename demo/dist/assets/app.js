@@ -1,4 +1,5 @@
 import { icon } from './icons.js';
+import { createViewState } from './view-state.js';
 import {
   init,
   request,
@@ -112,6 +113,8 @@ const state = {
 };
 let creationKey = null;
 let modalTrigger = null;
+const viewState = createViewState(window, document);
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 const initials = (name) =>
   name
     .split(' ')
@@ -214,7 +217,7 @@ async function reload() {
   state.detail = state.selected ? await request('/tickets/' + state.selected) : null;
 }
 function sidebar() {
-  return `<aside class="sidebar"><a class="brand" href="#tickets" aria-label="SupportOps AI · home"><span class="brand-mark">${icon('logo')}</span><span>SupportOps</span><em>AI</em></a><button class="workspace" data-action="switch-workspace"><span class="store-mark">${icon('leaf')}</span><div><strong>${esc(businessName())}</strong><small>${retailDemo() ? 'Sample workspace' : esc(account?.organization?.role || 'Choose workspace')}</small></div>${icon('down')}</button><p class="nav-label">WORKSPACE</p><nav>${[
+  return `<aside class="sidebar"><a class="brand" href="#tickets" aria-label="SupportOps AI · home"><span class="brand-mark">${icon('logo')}</span><span>SupportOps</span><em>AI</em></a><button class="workspace" data-action="switch-workspace"><span class="store-mark">${icon('leaf')}</span><div><strong>${esc(businessName())}</strong><small>${retailDemo() ? 'Sample workspace' : esc(account?.organization?.role || 'Choose workspace')}</small></div>${icon('down')}</button><p class="nav-label">WORKSPACE</p><nav data-scroll-key="workspace-nav">${[
     ['overview', 'grid'],
     ['tickets', 'inbox'],
     ['knowledge', 'book'],
@@ -266,6 +269,11 @@ function mountSignupCaptcha() {
 }
 let indexingPoll = null;
 function render() {
+  const workspace = account?.organization?.id || 'public';
+  const page = account && location.hash !== '#home' ? state.page : location.hash;
+  viewState.render(`${workspace}:${page}`, renderContent);
+}
+function renderContent() {
   clearTimeout(indexingPoll);
   if (
     location.hash === '#forgot' ||
@@ -346,7 +354,7 @@ function ticketsPage() {
     )
     .join(
       '',
-    )}</div><div class="toolbar-right"><label class="search-wrap">${icon('search')}<input id="ticket-search" aria-label="Search requests" placeholder="Search requests…" value="${esc(state.query)}"><kbd>⌘ K</kbd></label><button class="btn" data-action="sort" title="Change sort order">${icon('filter')}<span>${state.sort === 'newest' ? 'Newest' : 'Priority'}</span></button></div></div><section class="workbench" aria-label="Ticket workspace"><div class="ticket-list"><div class="list-heading"><b>Request queue</b>${icon('down')}</div><div id="ticket-items">${ticketItems()}</div></div><div class="ticket-detail" id="ticket-detail">${detailContent()}</div></section><div class="bottom-line"><span><i class="status-dot"></i>${esc(businessName())} · ${retailDemo() ? 'Synthetic sample data' : 'Your workspace'}</span><span><kbd>N</kbd> New request <kbd>⌘ K</kbd> Search</span></div>`;
+    )}</div><div class="toolbar-right"><label class="search-wrap">${icon('search')}<input id="ticket-search" aria-label="Search requests" placeholder="Search requests…" value="${esc(state.query)}"><kbd>⌘ K</kbd></label><button class="btn" data-action="sort" title="Change sort order">${icon('filter')}<span>${state.sort === 'newest' ? 'Newest' : 'Priority'}</span></button></div></div><section class="workbench" aria-label="Ticket workspace"><div class="ticket-list" data-scroll-key="${esc(account.organization?.id)}:queue"><div class="list-heading"><b>Request queue</b>${icon('down')}</div><div id="ticket-items">${ticketItems()}</div></div><div class="ticket-detail" id="ticket-detail" data-scroll-key="${esc(account.organization?.id)}:${esc(state.selected)}:detail">${detailContent()}</div></section><div class="bottom-line"><span><i class="status-dot"></i>${esc(businessName())} · ${retailDemo() ? 'Synthetic sample data' : 'Your workspace'}</span><span><kbd>N</kbd> New request <kbd>⌘ K</kbd> Search</span></div>`;
 }
 function filteredByStatus(id) {
   return state.tickets.filter(
@@ -533,6 +541,7 @@ const canManage = () => !isDemo && ['owner', 'admin'].includes(account?.organiza
 const businessName = () => account?.organization?.name || 'Your business';
 const retailDemo = () => isDemo || account?.organization?.is_demo;
 function resetWorkspace() {
+  viewState.clear();
   Object.assign(state, {
     tickets: [],
     docs: [],
@@ -1226,14 +1235,19 @@ function recoveryPage() {
 }
 
 function modal(title, subtitle, body, wide = false) {
-  modalTrigger = document.activeElement;
+  if (!$('#overlay').children.length) modalTrigger = document.activeElement;
   document.querySelector('#app').inert = true;
+  document.body.classList.add('modal-open');
   $('#overlay').innerHTML =
     `<div class="modal-backdrop"><section class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="modal-head"><h2>${esc(title)}</h2><button class="icon-btn" data-action="close-modal" aria-label="Close">${icon('x')}</button></div><p>${esc(subtitle)}</p>${body}</section></div>`;
-  setTimeout(() => $('#overlay input, #overlay textarea, #overlay button')?.focus(), 30);
+  (
+    $('#overlay input:not([type="hidden"]), #overlay textarea, #overlay select') ||
+    $('#overlay button')
+  )?.focus({ preventScroll: true });
 }
 function closeModal() {
   $('#overlay').innerHTML = '';
+  document.body.classList.remove('modal-open');
   document.querySelector('#app').inert = false;
   if (modalTrigger?.isConnected) modalTrigger.focus({ preventScroll: true });
 }
@@ -1620,15 +1634,31 @@ document.addEventListener('submit', async (e) => {
   if (form.id === 'escalate-form') await review('escalate', new FormData(form).get('note'));
 });
 document.addEventListener('keydown', (e) => {
-  if (!account) return;
   if (e.key === 'Escape') {
     closeModal();
     return;
   }
+  if ($('#overlay').children.length) {
+    if (e.key === 'Tab') {
+      const list = [
+        ...$('#overlay').querySelectorAll('button,input,textarea,select,a[href]'),
+      ].filter((x) => !x.disabled && x.type !== 'hidden' && x.getClientRects().length);
+      if (e.shiftKey && document.activeElement === list[0]) {
+        e.preventDefault();
+        list.at(-1)?.focus({ preventScroll: true });
+      } else if (!e.shiftKey && document.activeElement === list.at(-1)) {
+        e.preventDefault();
+        list[0]?.focus({ preventScroll: true });
+      }
+    }
+    return;
+  }
+  if (!account || !$('.app-shell')) return;
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
     e.preventDefault();
     if (state.page !== 'tickets') {
       state.page = 'tickets';
+      history.pushState(null, '', '#tickets');
       render();
     }
     $('#ticket-search')?.focus();
@@ -1642,18 +1672,6 @@ document.addEventListener('keydown', (e) => {
   ) {
     e.preventDefault();
     newTicket();
-  }
-  if (e.key === 'Tab' && $('#overlay').children.length) {
-    const list = [...$('#overlay').querySelectorAll('button,input,textarea,select,a[href]')].filter(
-      (x) => !x.disabled,
-    );
-    if (e.shiftKey && document.activeElement === list[0]) {
-      e.preventDefault();
-      list.at(-1)?.focus();
-    } else if (!e.shiftKey && document.activeElement === list.at(-1)) {
-      e.preventDefault();
-      list[0]?.focus();
-    }
   }
 });
 window.addEventListener('hashchange', () => {

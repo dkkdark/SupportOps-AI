@@ -3,10 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "node --experimental-vm-modules --test tests/frontend/*.test.js",
     "format": "prettier --write 'supportops/web/*.{js,css,html}'",
     "check:format": "prettier --check 'supportops/web/*.{js,css,html}'"
   },
   "devDependencies": {
+    "jsdom": "^26.1.0",
     "prettier": "3.5.3"
   }
 }

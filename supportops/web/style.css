@@ -18,6 +18,12 @@
 * {
   box-sizing: border-box;
 }
+html {
+  scrollbar-gutter: stable;
+}
+body.modal-open {
+  overflow: hidden;
+}
 body {
   margin: 0;
   font-size: 13px;
