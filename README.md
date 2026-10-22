@@ -21,7 +21,7 @@ python -m scripts.dev
 
 Open [the platform](http://127.0.0.1:8010) or [the product overview](http://127.0.0.1:8010/#home). API docs: [OpenAPI](http://127.0.0.1:8010/docs). Original local databases were backed up before migrations under ignored `var/backups/`. No secrets belong in Git.
 
-The full setup guide and remaining founder actions are in [launch checklist — Russian](docs/launch-checklist.ru.md). The current demo API setup is in [API connection steps — Russian](docs/api-setup.ru.md). Future pricing assumptions remain in [unit economics](docs/unit-economics.md).
+The full setup guide and remaining founder actions are in [launch checklist](docs/launch-checklist.md). The current demo API setup is in [API connection steps](docs/api-setup.md). Future pricing assumptions remain in [unit economics](docs/unit-economics.md).
 
 ## Real agent and RAG
 
@@ -78,7 +78,7 @@ The exhausted account is marked in `demo_accounts` with its user ID, limit times
 python -m scripts.demo_waitlist --output var/launch-notifications.csv
 ```
 
-A future launch mailing requires a configured provider, reviewed content and actual sending; `launch_email_sent_at` must only be recorded after delivery handling. See [API setup](docs/api-setup.ru.md). Earlier company-level model spending is conservatively migrated to the owner’s demo balance in migration 004. Future subscription code is retained behind the disabled release mode; changing that mode is a separate product launch.
+A future launch mailing requires a configured provider, reviewed content and actual sending; `launch_email_sent_at` must only be recorded after delivery handling. See [API setup](docs/api-setup.md). Earlier company-level model spending is conservatively migrated to the owner’s demo balance in migration 004. Future subscription code is retained behind the disabled release mode; changing that mode is a separate product launch.
 
 ## Verification
 
@@ -91,7 +91,7 @@ python -m scripts.live_acceptance  # opt-in real OpenAI calls; synthetic data; $
 npm run check:format
 ```
 
-The [local UI verification report](docs/ui-verification.ru.md) records browser checks, responsive layouts and fixed edge cases. CI runs the frontend regression suite alongside backend tests.
+The [local UI verification report](docs/ui-verification.md) records browser checks, responsive layouts and fixed edge cases. CI runs the frontend regression suite alongside backend tests.
 
 A real OpenAI acceptance test passed for an internal travel-expense question: document embedding → semantic search tool → generated policy explanation → separate grounding check → saved human approval. Its agent/query/review calls cost approximately **$0.00354 in that one run**, excluding initial document indexing. This is not an average-cost or production-accuracy benchmark. Controlled tests additionally cover bad citations, model rejection, indexing failures/retry, tenant boundaries, inbound channels, quotas, Stripe signatures/lifecycle and recovery tokens.
 
@@ -102,15 +102,15 @@ docker compose up --build -d
 docker compose down
 ```
 
-Real local Qdrant and PostgreSQL integrations have passed, including the agent workflow with controlled model responses. See [Qdrant setup and migration](docs/qdrant.ru.md). Terraform schema validation, Helm rendering/lint and Compose configuration checks are available. AWS and Kubernetes have not been deployed. Start real pilots and validate representative business requests before public expansion.
+Real local Qdrant and PostgreSQL integrations have passed, including the agent workflow with controlled model responses. See [Qdrant setup and migration](docs/qdrant.md). Terraform schema validation, Helm rendering/lint and Compose configuration checks are available. AWS and Kubernetes have not been deployed. Start real pilots and validate representative business requests before public expansion.
 
 ## Gmail sender
 
-The configured sender/contact is `info.xenonimus@gmail.com`. Server-side STARTTLS/SSL transport, credential-aware readiness and non-sending SMTP diagnostics are implemented. Add the Google App Password only to local `.env` or server secret storage; see [Gmail setup — Russian](docs/gmail-setup.ru.md). `python -m scripts.check_email` performs no network requests; add `--connect` to check TLS/authentication without sending a message. Incoming Gmail synchronization is not implemented.
+The configured sender/contact is `info.xenonimus@gmail.com`. Server-side STARTTLS/SSL transport, credential-aware readiness and non-sending SMTP diagnostics are implemented. Add the Google App Password only to local `.env` or server secret storage; see [Gmail setup](docs/gmail-setup.md). `python -m scripts.check_email` performs no network requests; add `--connect` to check TLS/authentication without sending a message. Incoming Gmail synchronization is not implemented.
 
 ## Delivery and operation
 
-Durable account-mail delivery, worker heartbeat/retries, technical retention, private account export/deletion requests, AI-charge reconciliation and isolated SQLite restore drills are implemented. Commands and external launch prerequisites: [backend operations — Russian](docs/backend-operations.ru.md). Production startup checks the schema; `python -m scripts.migrate` initializes both application and checkpoint tables.
+Durable account-mail delivery, worker heartbeat/retries, technical retention, private account export/deletion requests, AI-charge reconciliation and isolated SQLite restore drills are implemented. Commands and external launch prerequisites: [backend operations](docs/backend-operations.md). Production startup checks the schema; `python -m scripts.migrate` initializes both application and checkpoint tables.
 
 - SQLite quick start; private PostgreSQL for business records/checkpoints and separate Qdrant for semantic vectors in deployment. Historical migrations still require the vector extension; new semantic indexing does not write SQL vectors.
 - Terraform: HTTPS ALB, Fargate application/indexer, RDS, ECR, Secrets Manager, CloudWatch, optional telemetry and scoped GitHub OIDC.

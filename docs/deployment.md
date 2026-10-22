@@ -104,4 +104,4 @@ The chart is a local deployment alternative. An EKS rollout needs ingress/TLS, w
 
 ## Qdrant migration and backups
 
-See [Qdrant operations](qdrant.ru.md). Migration 006 retains old vectors and creates an evidence registry. Stop app/worker, back up SQL/checkpoints, migrate and transfer cached vectors with `python -m scripts.transfer_vectors --apply --confirm-stopped`; this command never calls OpenAI. Sources without complete cached embeddings need an explicit owner-triggered paid reindex. Qdrant snapshots/storage must be backed up separately; test their restore alongside SQL. Health is available at `/health/vector`.
+See [Qdrant operations](qdrant.md). Migration 006 retains old vectors and creates an evidence registry. Stop app/worker, back up SQL/checkpoints, migrate and transfer cached vectors with `python -m scripts.transfer_vectors --apply --confirm-stopped`; this command never calls OpenAI. Sources without complete cached embeddings need an explicit owner-triggered paid reindex. Qdrant snapshots/storage must be backed up separately; test their restore alongside SQL. Health is available at `/health/vector`.

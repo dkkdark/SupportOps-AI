@@ -35,7 +35,7 @@ python -m eval.run --split holdout
 
 Each run creates an isolated temporary database, controlled order API responses and fresh checkpoints. The order fixtures’ delivered dates are set to two days before the evaluation date so a moving calendar does not invalidate the ordinary-return scenario. The normal application uses the dates in the actual synthetic API fixture. Both date assumptions are intentional; the policies themselves are effective from October 1, 2026.
 
-The development corpus identified a Russian inflection bug (`денег` versus `деньг`) before the English conversion. The regression remains in tests. Evaluate development changes against development data, then run the reserved set once for release assessment. When a reserved result drives further tuning, retire/version that set and create a new final sample rather than reporting it as untouched.
+The development corpus identified a Russian word-inflection bug in the money-intent classifier before the English conversion. The regression remains in tests. Evaluate development changes against development data, then run the reserved set once for release assessment. When a reserved result drives further tuning, retire/version that set and create a new final sample rather than reporting it as untouched.
 
 ## Live benchmark
 
