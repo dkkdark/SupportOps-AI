@@ -105,6 +105,8 @@ const state = {
   metrics: {},
   evaluation: { status: 'not_run' },
   detail: null,
+  detailLoading: false,
+  detailError: false,
   busy: false,
   drafts: {},
   sort: 'newest',
@@ -113,6 +115,11 @@ const state = {
 };
 let creationKey = null;
 let modalTrigger = null;
+let workspaceEpoch = 0;
+let reloadVersion = 0;
+let selectionVersion = 0;
+let switchingWorkspace = false;
+const workspaceToken = () => `${workspaceEpoch}:${account?.user?.id}:${account?.organization?.id}`;
 const viewState = createViewState(window, document);
 if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 const initials = (name) =>
@@ -169,6 +176,8 @@ function fail(e) {
   toast(names[e.message] || e.message || 'The request could not be completed', true);
 }
 async function reload() {
+  const workspace = workspaceToken();
+  const version = ++reloadVersion;
   const [
     tickets,
     docs,
@@ -198,6 +207,7 @@ async function reload() {
     isDemo ? {} : request('/billing'),
     isDemo ? [] : request('/plans'),
   ]);
+  if (workspace !== workspaceToken() || version !== reloadVersion) return false;
   Object.assign(state, {
     tickets,
     docs,
@@ -213,8 +223,18 @@ async function reload() {
     invitations,
     audit,
   });
-  if (!tickets.some((t) => t.id === state.selected)) state.selected = tickets[0]?.id;
-  state.detail = state.selected ? await request('/tickets/' + state.selected) : null;
+  const rows = filteredTickets();
+  if (!rows.some((t) => t.id === state.selected)) state.selected = rows[0]?.id || null;
+  const selected = state.selected;
+  const selection = selectionVersion;
+  const detail = selected ? await request('/tickets/' + selected) : null;
+  if (workspace !== workspaceToken() || version !== reloadVersion) return false;
+  if (selected === state.selected && selection === selectionVersion) {
+    state.detail = detail;
+    state.detailLoading = false;
+    state.detailError = false;
+  }
+  return true;
 }
 function sidebar() {
   return `<aside class="sidebar"><a class="brand" href="#tickets" aria-label="SupportOps AI · home"><span class="brand-mark">${icon('logo')}</span><span>SupportOps</span><em>AI</em></a><button class="workspace" data-action="switch-workspace"><span class="store-mark">${icon('leaf')}</span><div><strong>${esc(businessName())}</strong><small>${retailDemo() ? 'Sample workspace' : esc(account?.organization?.role || 'Choose workspace')}</small></div>${icon('down')}</button><p class="nav-label">WORKSPACE</p><nav data-scroll-key="workspace-nav">${[
@@ -270,7 +290,7 @@ function mountSignupCaptcha() {
 let indexingPoll = null;
 function render() {
   const workspace = account?.organization?.id || 'public';
-  const page = account && location.hash !== '#home' ? state.page : location.hash;
+  const page = location.hash || state.page;
   viewState.render(`${workspace}:${page}`, renderContent);
 }
 function renderContent() {
@@ -392,10 +412,14 @@ function ticketItems() {
     : `<div class="empty">${icon('search')}No requests found<button class="btn" data-action="clear-search">Clear filters</button></div>`;
 }
 function detailContent() {
+  if (state.detailLoading)
+    return `<div class="empty" role="status">${icon('refresh', 'spinner')}Loading request…</div>`;
+  if (state.detailError)
+    return `<div class="empty" role="alert">Could not load this request.<button class="btn" data-action="retry-ticket">Try again</button></div>`;
   const t = state.detail;
   if (!t) return `<div class="empty">Select a request from the queue</div>`;
   const r = t.result;
-  return `<div class="detail-top"><div class="ticket-id">${esc(t.id)}<span>•</span>${icon(channelIcon(t.channel))}${{ email: 'Email', chat: 'Chat', web: 'Web form', api: 'Inbound API', internal: 'Internal' }[t.channel] || esc(t.channel)}</div><div class="detail-top-right">${t.priority === 'high' ? '<span class="priority"><i class="priority-dot"></i>High priority</span>' : ''}<button class="icon-btn" data-action="copy-id" title="Copy ticket ID" aria-label="Copy ticket ID">${icon('copy')}</button></div></div><div class="detail-grid"><div class="conversation"><h2 class="ticket-title">${esc(t.subject)}</h2><div class="category-line">${(r?.categories?.length ? r.categories : [t.category]).map((c) => `<span class="category-tag">${categoryNames[c] || esc(c)}</span>`).join('')}${t.order_id ? `<span class="category-tag">Order #${esc(t.order_id)}</span>` : ''}</div><article class="message-card"><div class="message-head"><div class="avatar">${esc(initials(t.customer))}</div><div><strong>${esc(t.customer)}</strong><small>${esc(t.email || 'Requester')}</small></div><time class="message-time">${fmtDate(t.created_at)}</time></div><p>${esc(t.message).replace(/\n/g, '<br>')}</p></article><section class="ai-panel"><div class="ai-heading"><div class="ai-heading-title">${icon('spark')}SupportOps assistant</div><span class="badge">${retailDemo() ? 'Sample workflow' : r?.manifest?.engine === 'openai-agent-v1' ? 'OpenAI agent' : config.provider === 'baseline' ? 'Offline baseline' : 'OpenAI + verification'}</span></div>${state.busy ? `<div class="loading-line"></div><div class="empty">${icon('refresh', 'spinner')}Investigating the request and gathering evidence…</div>` : !r ? emptyDraft() : analysisContent(t, r)}</section>${reviewActions(t)}<p class="review-caption">${icon('shield')}Replies are never sent to customers automatically</p></div>${contextPanel(t, r)}</div>`;
+  return `<div class="detail-top"><div class="ticket-id">${esc(t.id)}<span>•</span>${icon(channelIcon(t.channel))}${{ email: 'Email', chat: 'Chat', web: 'Web form', api: 'Inbound API', internal: 'Internal' }[t.channel] || esc(t.channel)}</div><div class="detail-top-right">${t.priority === 'high' ? '<span class="priority"><i class="priority-dot"></i>High priority</span>' : ''}<button class="icon-btn" data-action="copy-id" title="Copy ticket ID" aria-label="Copy ticket ID">${icon('copy')}</button></div></div><div class="detail-grid"><div class="conversation"><h2 class="ticket-title">${esc(t.subject)}</h2><div class="category-line">${(r?.categories?.length ? r.categories : [t.category]).map((c) => `<span class="category-tag">${categoryNames[c] || esc(c)}</span>`).join('')}${t.order_id ? `<span class="category-tag">Order #${esc(t.order_id)}</span>` : ''}</div><article class="message-card"><div class="message-head"><div class="avatar">${esc(initials(t.customer))}</div><div><strong>${esc(t.customer)}</strong><small>${esc(t.email || 'Requester')}</small></div><time class="message-time">${fmtDate(t.created_at)}</time></div><p>${esc(t.message).replace(/\n/g, '<br>')}</p></article><section class="ai-panel"><div class="ai-heading"><div class="ai-heading-title">${icon('spark')}SupportOps assistant</div><span class="badge">${retailDemo() ? 'Sample workflow' : r?.manifest?.engine === 'openai-agent-v1' ? 'OpenAI agent' : config.provider === 'baseline' ? 'Offline baseline' : 'OpenAI + verification'}</span></div>${state.busy === t.id ? `<div class="loading-line"></div><div class="empty">${icon('refresh', 'spinner')}Investigating the request and gathering evidence…</div>` : !r ? emptyDraft() : analysisContent(t, r)}</section>${reviewActions(t)}<p class="review-caption">${icon('shield')}Replies are never sent to customers automatically</p></div>${contextPanel(t, r)}</div>`;
 }
 function emptyDraft() {
   return `<div class="empty"><div class="waiting-illustration">${icon('spark')}</div><strong>From a question to a grounded reply</strong>Check the order, find the right policies<br>and prepare a draft with clear sources.<br><button class="btn btn-primary" data-action="analyze" ${config.demo_release && state.billing?.limit_reached && !retailDemo() ? 'disabled title="Demo AI allowance reached"' : ''}>${icon('spark')}Prepare a reply</button></div>`;
@@ -541,6 +565,9 @@ const canManage = () => !isDemo && ['owner', 'admin'].includes(account?.organiza
 const businessName = () => account?.organization?.name || 'Your business';
 const retailDemo = () => isDemo || account?.organization?.is_demo;
 function resetWorkspace() {
+  workspaceEpoch++;
+  reloadVersion++;
+  selectionVersion++;
   viewState.clear();
   Object.assign(state, {
     tickets: [],
@@ -556,9 +583,14 @@ function resetWorkspace() {
     metrics: {},
     evaluation: {},
     detail: null,
+    detailLoading: false,
+    detailError: false,
+    busy: false,
     selected: null,
     drafts: {},
     filter: 'all',
+    sort: 'newest',
+    tab: 'draft',
     query: '',
     page: 'tickets',
     docQuery: '',
@@ -647,8 +679,20 @@ async function handlePlatformAction(el) {
     return true;
   }
   if (el.dataset.switch) {
-    await authenticate('/auth/switch', { organization_id: el.dataset.switch });
-    await enteredWorkspace();
+    if (switchingWorkspace) return true;
+    switchingWorkspace = true;
+    document.querySelectorAll('[data-switch]').forEach((button) => {
+      button.disabled = true;
+    });
+    try {
+      await authenticate('/auth/switch', { organization_id: el.dataset.switch });
+      await enteredWorkspace();
+    } finally {
+      switchingWorkspace = false;
+      document.querySelectorAll('[data-switch]').forEach((button) => {
+        button.disabled = false;
+      });
+    }
     return true;
   }
   if (el.dataset.revoke) {
@@ -749,6 +793,7 @@ async function handlePlatformSubmit(form) {
   ];
   if (!ids.includes(form.id)) return false;
   const button = form.querySelector('button[type="submit"],button.btn-primary');
+  if (button.disabled) return true;
   button.disabled = true;
   const error = form.querySelector('.form-error');
   if (error) error.textContent = '';
@@ -1155,6 +1200,7 @@ async function businessSubmit(form) {
     return false;
   const button = form.querySelector('.btn-primary'),
     error = form.querySelector('.form-error');
+  if (button.disabled) return true;
   button.disabled = true;
   if (error) error.textContent = '';
   try {
@@ -1305,47 +1351,77 @@ function download(name, value) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 async function selectTicket(id, workflow = false) {
-  state.selected = id;
+  const workspace = workspaceToken();
+  const version = ++selectionVersion;
+  state.selected = id || null;
   state.tab = workflow ? 'workflow' : 'draft';
+  state.detail = null;
+  state.detailLoading = !!id;
+  state.detailError = false;
+  render();
+  if (!id) return;
   try {
-    state.detail = await request('/tickets/' + id);
-    render();
+    const detail = await request('/tickets/' + id);
+    if (workspace !== workspaceToken() || version !== selectionVersion) return;
+    state.detail = detail;
   } catch (e) {
+    if (workspace !== workspaceToken() || version !== selectionVersion) return;
+    state.detailError = true;
     fail(e);
+  } finally {
+    if (workspace === workspaceToken() && version === selectionVersion) {
+      state.detailLoading = false;
+      render();
+    }
+  }
+}
+async function updateQueue() {
+  const rows = filteredTickets();
+  if (!rows.some((t) => t.id === state.selected)) await selectTicket(rows[0]?.id);
+  else {
+    $('#ticket-items').innerHTML = ticketItems();
   }
 }
 async function analyze(fault = 'none') {
   if (state.busy || !state.detail) return;
+  const workspace = workspaceToken();
   const id = state.selected;
-  state.busy = true;
+  state.busy = id;
   render();
   try {
-    await request(`/tickets/${id}/analyze`, { method: 'POST', body: { fault } });
+    const result = await request(`/tickets/${id}/analyze`, { method: 'POST', body: { fault } });
+    if (workspace !== workspaceToken()) return;
     await reload();
-    state.tab = 'draft';
+    if (workspace !== workspaceToken()) return;
+    if (state.selected === id) state.tab = 'draft';
     toast(
-      state.detail.result?.reason
-        ? 'This ticket needs manual review'
-        : 'Your draft is ready for review',
+      result.result?.reason ? 'This ticket needs manual review' : 'Your draft is ready for review',
     );
   } catch (e) {
+    if (workspace !== workspaceToken()) return;
     if (config.demo_release && e.status === 429) await reload();
     fail(e);
   } finally {
-    state.busy = false;
-    render();
+    if (workspace === workspaceToken() && state.busy === id) {
+      state.busy = false;
+      render();
+    }
   }
 }
 async function review(decision, note = '') {
+  const workspace = workspaceToken();
   const t = state.detail;
+  if (!t || t.id !== state.selected) return;
   const text = state.drafts[t.id] ?? t.result?.draft ?? '';
   const button = $(`[data-action="${decision === 'approve' ? 'approve' : 'escalate'}"]`);
+  if (button?.disabled) return;
   if (button) button.disabled = true;
   try {
     await request(`/tickets/${t.id}/review`, {
       method: 'POST',
       body: { decision, text, note, revision: t.revision },
     });
+    if (workspace !== workspaceToken()) return;
     closeModal();
     await reload();
     render();
@@ -1355,6 +1431,11 @@ async function review(decision, note = '') {
         : 'Request escalated to an agent',
     );
   } catch (e) {
+    if (workspace !== workspaceToken()) return;
+    if (e.status === 409) {
+      await reload();
+      render();
+    }
     fail(e);
     if (button) button.disabled = false;
   }
@@ -1398,12 +1479,14 @@ document.addEventListener('click', async (e) => {
   if (el.dataset.openTicket) {
     state.page = 'tickets';
     state.filter = 'all';
+    state.query = '';
     history.replaceState(null, '', '#tickets');
     await selectTicket(el.dataset.openTicket, !!el.dataset.workflow);
     return;
   }
   if (el.dataset.filter) {
     state.filter = el.dataset.filter;
+    await updateQueue();
     render();
     return;
   }
@@ -1440,7 +1523,11 @@ document.addEventListener('click', async (e) => {
       case 'clear-search':
         state.filter = 'all';
         state.query = '';
+        await updateQueue();
         render();
+        break;
+      case 'retry-ticket':
+        await selectTicket(state.selected);
         break;
       case 'sort':
         state.sort = state.sort === 'newest' ? 'priority' : 'newest';
@@ -1582,7 +1669,7 @@ python -m eval.run --split holdout --live</pre><p class="modal-prose">Dev and ho
 document.addEventListener('input', (e) => {
   if (e.target.id === 'ticket-search') {
     state.query = e.target.value;
-    $('#ticket-items').innerHTML = ticketItems();
+    updateQueue().catch(fail);
   }
   if (e.target.id === 'draft-text') {
     state.drafts[state.selected] = e.target.value;
@@ -1604,6 +1691,7 @@ document.addEventListener('submit', async (e) => {
   if (await handlePlatformSubmit(form)) return;
   if (form.id === 'ticket-form') {
     const button = form.querySelector('[type="submit"]');
+    if (button.disabled) return;
     button.disabled = true;
     try {
       const values = Object.fromEntries(new FormData(form));
@@ -1675,6 +1763,7 @@ document.addEventListener('keydown', (e) => {
   }
 });
 window.addEventListener('hashchange', () => {
+  if ($('#overlay').children.length) closeModal();
   if (location.hash === '#home') {
     render();
     return;
