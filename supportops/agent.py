@@ -13,6 +13,7 @@ from supportops.db import Document, ReplyTemplate, RequestType, RequestContext
 from supportops.content import render_template
 from supportops.openai_client import ModelError, OpenAIClient, output_json
 from supportops.semantic import search, profile
+from supportops.vector_store import QdrantStore
 from supportops.workflow import State
 from supportops.telemetry import step
 
@@ -98,7 +99,7 @@ def strict_schema(model):
     return model.model_json_schema()
 
 
-def run_agent(config, sessions, state, transport=None):
+def run_agent(config, sessions, state, transport=None, vector_transport=None):
     s = state.copy()
     s.update(
         sources=[],
@@ -123,6 +124,12 @@ def run_agent(config, sessions, state, transport=None):
                 )
             }
         )
+        vector_store = QdrantStore(config, profile(config), vector_transport)
+        try:
+            if not vector_store.health():
+                raise ModelError("vector_store_unavailable")
+        finally:
+            vector_store.close()
         client = OpenAIClient(run_config, transport)
         with sessions() as db:
             templates = db.scalars(
@@ -217,6 +224,7 @@ def run_agent(config, sessions, state, transport=None):
                                 s["organization_id"],
                                 args["query"],
                                 6,
+                                vector_transport,
                             )
                             searched = True
                             for d in rows:
@@ -400,6 +408,7 @@ def run_agent(config, sessions, state, transport=None):
             "model": config.agent_model,
             "verifier": config.verifier_model,
             "embedding": config.embedding_model,
+            "vector_store": "qdrant",
             "embedding_dimensions": 1536,
             "embedding_profile": profile(config),
             "prompt": "agent-v1-" + hashlib.sha256(PROMPT.encode()).hexdigest()[:12],
@@ -418,10 +427,12 @@ def run_agent(config, sessions, state, transport=None):
     return s
 
 
-def build_agent_graph(config, sessions, checkpointer, transport=None):
+def build_agent_graph(
+    config, sessions, checkpointer, transport=None, vector_transport=None
+):
     def agent(s):
         with step(s, "agent"):
-            s.update(run_agent(config, sessions, s, transport))
+            s.update(run_agent(config, sessions, s, transport, vector_transport))
         return s
 
     def review(s):

@@ -50,7 +50,12 @@ def launch_router(auth, sessions, config):
                 {
                     "name": "Database",
                     "ready": config.database_url.startswith("postgresql"),
-                    "action": "Use the private PostgreSQL/pgvector deployment and backup both app and checkpoint tables.",
+                    "action": "Use private PostgreSQL for business records and back up app and checkpoint tables. Semantic vectors are stored separately in Qdrant.",
+                },
+                {
+                    "name": "Qdrant vector search",
+                    "ready": bool(config.qdrant_url),
+                    "action": "Configure a private QDRANT_URL, protect access and verify /health/vector. Back up Qdrant storage separately.",
                 },
                 {
                     "name": "Email verification and recovery",
@@ -103,7 +108,7 @@ def launch_router(auth, sessions, config):
                 403, "Only the workspace owner can export the business data."
             )
         with sessions() as db:
-            data = {"business": actor.organization, "schema_version": "005"}
+            data = {"business": actor.organization, "schema_version": "006"}
             for cls, label in [
                 (KnowledgeSource, "knowledge"),
                 (RequestType, "request_types"),

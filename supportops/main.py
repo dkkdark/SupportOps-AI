@@ -139,11 +139,13 @@ def create_app(
     llm_transport=None,
     embedding_transport=None,
     billing_transport=None,
+    vector_transport=None,
 ):
     config = config or settings()
     engine, sessions = make_database(config.database_url)
     auth = Auth(config, sessions)
     auth.embedding_transport = embedding_transport
+    auth.vector_transport = vector_transport
     auth.config = config
 
     @asynccontextmanager
@@ -175,7 +177,7 @@ def create_app(
                 config, sessions, cp, orders_transport, llm_transport
             )
             app.state.agent_graph = build_agent_graph(
-                config, sessions, cp, llm_transport
+                config, sessions, cp, llm_transport, vector_transport
             )
             app.state.sessions = sessions
             app.state.auth = auth
@@ -284,6 +286,23 @@ def create_app(
         except Exception:
             raise HTTPException(503, "Database unavailable.")
 
+    @app.get("/health/vector")
+    def vector_health():
+        from supportops.semantic import profile
+        from supportops.vector_store import QdrantStore
+
+        store = None
+        try:
+            store = QdrantStore(config, profile(config), vector_transport)
+            if not store.health():
+                raise ValueError()
+            return {"status": "ok", "store": "qdrant"}
+        except Exception:
+            raise HTTPException(503, "Vector search unavailable.")
+        finally:
+            if store:
+                store.close()
+
     @app.get("/api/config")
     def public_config():
         from supportops.mailer import email_status
@@ -299,6 +318,7 @@ def create_app(
             or config.allow_demo_signup,
             "agent_model": config.agent_model,
             "embedding_model": config.embedding_model,
+            "vector_store": "qdrant",
             "captcha_site_key": config.turnstile_site_key
             if config.require_signup_captcha
             else "",

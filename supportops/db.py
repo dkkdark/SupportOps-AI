@@ -294,6 +294,29 @@ class ChunkEmbedding(Base):
     )
 
 
+class VectorEntry(Base):
+    """SQL evidence registry. Actual semantic vectors live only in Qdrant."""
+
+    __tablename__ = "vector_entries"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "document_id"],
+            ["documents.organization_id", "documents.id"],
+        ),
+    )
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), primary_key=True
+    )
+    document_id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    profile: Mapped[str] = mapped_column(String(64), primary_key=True)
+    point_id: Mapped[str] = mapped_column(String(36))
+    model: Mapped[str] = mapped_column(String(120))
+    text_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
+
 class IndexJob(Base):
     __tablename__ = "index_jobs"
     __table_args__ = (

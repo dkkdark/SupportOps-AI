@@ -224,7 +224,7 @@ def test_backup_verification_restore_drill_and_corruption_detection(platform, tm
     # No concurrent writers in this isolated test fixture.
     saved = tmp_path / "snapshot"
     manifest = create(config.database_url, saved, confirm_stopped=True)
-    assert manifest["schema_revision"] == "005"
+    assert manifest["schema_revision"] == "006"
     assert verify(saved)["files"]
     result = restore_check(saved, tmp_path / "restored")
     assert result["verified"] and c.get("/api/auth/me").status_code == 200

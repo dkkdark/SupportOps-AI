@@ -325,6 +325,7 @@ def content_router(auth, sessions):
                 actor.organization_id,
                 source_id,
                 transport,
+                getattr(auth, "vector_transport", None),
             )
 
     router = APIRouter(prefix="/api")

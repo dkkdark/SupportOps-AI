@@ -2,13 +2,9 @@
 
 import json
 import httpx
-import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy import select
-from supportops.config import Settings
-from supportops.main import create_app
-from supportops.db import ChunkEmbedding, CreditReservation, UsageCounter
-from tests.test_workspaces import register, make_ticket, POLICY
+from supportops.db import VectorEntry, CreditReservation, UsageCounter
+from tests.test_workspaces import make_ticket, POLICY
 
 
 class Models:
@@ -105,26 +101,6 @@ class Models:
         )
 
 
-@pytest.fixture
-def ai_client(tmp_path):
-    models = Models()
-    transport = httpx.MockTransport(models)
-    app = create_app(
-        Settings(
-            database_url=f"sqlite:///{tmp_path}/ai.db",
-            model_provider="openai",
-            embedding_provider="openai",
-            openai_api_key="synthetic-key",
-            openai_base_url="https://models.example.test/v1",
-        ),
-        llm_transport=transport,
-        embedding_transport=transport,
-    )
-    with TestClient(app) as c:
-        register(c)
-        yield c, models
-
-
 def publish(c):
     r = c.post("/api/knowledge", json=POLICY)
     assert r.status_code == 201, r.text
@@ -173,7 +149,7 @@ def test_real_model_protocol_tools_embeddings_verification_and_checkpoint(ai_cli
     billing = c.get("/api/billing").json()
     assert 0 < billing["used"]["credits"] < 90
     with c.app.state.sessions() as db:
-        assert len(db.scalars(select(ChunkEmbedding)).all()) > 0
+        assert len(db.scalars(select(VectorEntry)).all()) > 0
         assert all(r.settled for r in db.scalars(select(CreditReservation)).all())
 
 
@@ -198,7 +174,7 @@ def test_index_failure_is_visible_retryable_and_does_not_fake_embeddings(ai_clie
     status = c.get("/api/knowledge").json()[0]["indexing"]
     assert status["status"] == "failed"
     with c.app.state.sessions() as db:
-        assert not db.scalars(select(ChunkEmbedding)).all()
+        assert not db.scalars(select(VectorEntry)).all()
     models.fail_embeddings = False
     assert c.post("/api/knowledge/" + r.json()["id"] + "/reindex").status_code == 200
     assert c.get("/api/knowledge").json()[0]["indexing"]["status"] == "ready"

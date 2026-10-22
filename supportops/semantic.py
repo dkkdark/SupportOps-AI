@@ -3,8 +3,7 @@
 from datetime import date, timedelta
 import hashlib
 import math
-from sqlalchemy import select, update, cast
-from pgvector.sqlalchemy import Vector
+from sqlalchemy import select, update
 from fastapi import HTTPException
 from supportops.db import (
     Organization,
@@ -13,17 +12,26 @@ from supportops.db import (
     Document,
     IndexJob,
     KnowledgeSource,
+    VectorEntry,
     utcnow,
 )
 from supportops.openai_client import ModelError, OpenAIClient
 from supportops.retrieval import terms, serialize_document
 from supportops.billing import reserve, settle, reservation_budget, CREDIT_USD
 from supportops.auth import identifier
+from supportops.vector_store import QdrantStore, point_id, valid_vector
+
+
+def legacy_profile(config):
+    return hashlib.sha256(
+        f"{config.openai_base_url.rstrip('/')}:{config.embedding_model}:1536:v1".encode()
+    ).hexdigest()
 
 
 def profile(config):
+    # A new target never inherits another Qdrant instance's SQL readiness state.
     return hashlib.sha256(
-        f"{config.openai_base_url.rstrip('/')}:{config.embedding_model}:1536:v1".encode()
+        f"{legacy_profile(config)}:qdrant-v1:{config.qdrant_url.rstrip('/')}:{config.qdrant_collection}".encode()
     ).hexdigest()
 
 
@@ -55,12 +63,22 @@ def enqueue(db, config, org_id, source_id, user_id=None):
     return job
 
 
-def index_source(config, sessions, org_id, source_id, transport=None):
+def index_source(
+    config,
+    sessions,
+    org_id,
+    source_id,
+    transport=None,
+    vector_transport=None,
+    *,
+    allow_model_calls=True,
+):
     if config.embedding_provider != "openai":
         return
     key = (org_id, source_id, profile(config))
     claim = identifier()
     client = None
+    store = None
     reservation_id = None
     with sessions() as db:
         org = db.get(Organization, org_id)
@@ -110,13 +128,48 @@ def index_source(config, sessions, org_id, source_id, transport=None):
                 Document.organization_id == org_id, Document.source_id == source_id
             )
         ).all()
-        pending = [
-            d
-            for d in docs
-            if (cached := db.get(ChunkEmbedding, (org_id, d.id, key[2]))) is None
-            or cached.text_hash != text_hash(d)
-        ]
     try:
+        # Check Qdrant before reserving allowance or contacting a paid model.
+        store = QdrantStore(config, key[2], vector_transport)
+        store.ensure()
+        points = {
+            d.id: {
+                "id": point_id(org_id, d.id, key[2], text_hash(d)),
+                "payload": {
+                    "organization_id": org_id,
+                    "document_id": d.id,
+                    "source_id": source_id,
+                    "profile": key[2],
+                    "text_hash": text_hash(d),
+                },
+            }
+            for d in docs
+        }
+        # Deterministic IDs allow a retry after Qdrant succeeded but SQL commit failed.
+        remote = {
+            str(p.get("id")): p
+            for p in store.retrieve([p["id"] for p in points.values()])
+        }
+        with sessions() as db:
+            for d in docs:
+                point = points[d.id]
+                existing = remote.get(point["id"], {})
+                if existing.get("payload") == point["payload"] and valid_vector(
+                    existing.get("vector")
+                ):
+                    point["vector"] = existing["vector"]
+                    continue
+                # Read-only legacy cache: never pay to re-embed an unchanged document.
+                cached = db.get(ChunkEmbedding, (org_id, d.id, legacy_profile(config)))
+                if (
+                    cached
+                    and cached.text_hash == text_hash(d)
+                    and valid_vector(list(cached.vector))
+                ):
+                    point["vector"] = list(cached.vector)
+        pending = [d for d in docs if "vector" not in points[d.id]]
+        if pending and not allow_model_calls:
+            raise ModelError("legacy_vectors_missing")
         if pending:
             with sessions() as db:
                 upper_bytes = sum(len(embedding_text(d).encode()) for d in pending)
@@ -142,54 +195,50 @@ def index_source(config, sessions, org_id, source_id, transport=None):
                 transport,
             )
             vectors = client.embeddings([embedding_text(d) for d in pending])
-            with sessions() as db:
-                job = db.scalar(
-                    select(IndexJob)
-                    .where(
-                        IndexJob.organization_id == org_id,
-                        IndexJob.source_id == source_id,
-                        IndexJob.profile == key[2],
-                        IndexJob.lease_token == claim,
-                    )
-                    .with_for_update()
+            for d, vector in zip(pending, vectors):
+                points[d.id]["vector"] = vector
+        with sessions() as db:
+            job = db.scalar(
+                select(IndexJob)
+                .where(
+                    IndexJob.organization_id == org_id,
+                    IndexJob.source_id == source_id,
+                    IndexJob.profile == key[2],
+                    IndexJob.lease_token == claim,
                 )
-                if not job:
-                    raise ModelError("index_claim_expired")
-                for d, vector in zip(pending, vectors):
-                    current = db.get(Document, (org_id, d.id))
-                    if not current or text_hash(current) != text_hash(d):
-                        raise ModelError("knowledge_changed")
-                    db.merge(
-                        ChunkEmbedding(
-                            organization_id=org_id,
-                            document_id=d.id,
-                            profile=key[2],
-                            model=config.embedding_model,
-                            text_hash=text_hash(d),
-                            vector=vector,
-                        )
+                .with_for_update()
+            )
+            if not job:
+                raise ModelError("index_claim_expired")
+            source = db.get(KnowledgeSource, (org_id, source_id))
+            if not source or source.archived:
+                raise ModelError("knowledge_changed")
+            for d in docs:
+                current = db.get(Document, (org_id, d.id))
+                if not current or text_hash(current) != text_hash(d):
+                    raise ModelError("knowledge_changed")
+            # An acknowledged Qdrant write precedes SQL evidence publication.
+            store.upsert(list(points.values()))
+            for d in docs:
+                db.merge(
+                    VectorEntry(
+                        organization_id=org_id,
+                        document_id=d.id,
+                        profile=key[2],
+                        point_id=points[d.id]["id"],
+                        model=config.embedding_model,
+                        text_hash=text_hash(d),
                     )
-                job = db.get(IndexJob, key)
-                if job.lease_token != claim:
-                    return
-                job.status = "ready"
-                job.lease_token = None
-                job.next_attempt_at = None
-                job.error = None
-                job.input_tokens += client.usage["embedding_tokens"]
-                job.updated_at = utcnow()
-                db.commit()
-        else:
-            with sessions() as db:
-                job = db.get(IndexJob, key)
-                if job.lease_token != claim:
-                    return
-                job.status = "ready"
-                job.lease_token = None
-                job.next_attempt_at = None
-                job.error = None
-                job.updated_at = utcnow()
-                db.commit()
+                )
+            job.status, job.lease_token, job.next_attempt_at, job.error = (
+                "ready",
+                None,
+                None,
+                None,
+            )
+            job.input_tokens += client.usage["embedding_tokens"] if client else 0
+            job.updated_at = utcnow()
+            db.commit()
     except Exception as exc:
         code = (
             exc.code
@@ -205,6 +254,11 @@ def index_source(config, sessions, org_id, source_id, transport=None):
             "demo_budget_exhausted",
             "membership_revoked",
             "agent_budget_exceeded",
+            "legacy_vectors_missing",
+            "vector_store_not_configured",
+            "vector_store_auth_failed",
+            "vector_store_tls_required",
+            "vector_store_profile_mismatch",
         )
         with sessions() as db:
             db.execute(
@@ -236,6 +290,8 @@ def index_source(config, sessions, org_id, source_id, transport=None):
             )
         if client:
             client.close()
+        if store:
+            store.close()
 
 
 def index_status(db, config, source):
@@ -244,11 +300,12 @@ def index_status(db, config, source):
         "status": job.status if job else "not_indexed",
         "error": job.error if job else None,
         "model": config.embedding_model,
+        "store": "qdrant",
         "updated_at": job.updated_at.isoformat() if job else None,
     }
 
 
-def search(db, config, client, org_id, query, limit=6):
+def search(db, config, client, org_id, query, limit=6, vector_transport=None):
     if not query.strip() or len(query) > 1000:
         raise ModelError("invalid_tool_arguments")
     day = date.today().isoformat()
@@ -261,36 +318,67 @@ def search(db, config, client, org_id, query, limit=6):
     ]
     # Scope and model-profile filters are applied before candidates reach the agent.
     stmt = (
-        select(ChunkEmbedding, Document)
-        .select_from(ChunkEmbedding)
+        select(VectorEntry, Document)
+        .select_from(VectorEntry)
         .join(
             Document,
-            (Document.organization_id == ChunkEmbedding.organization_id)
-            & (Document.id == ChunkEmbedding.document_id),
+            (Document.organization_id == VectorEntry.organization_id)
+            & (Document.id == VectorEntry.document_id),
         )
         .where(
             *current,
-            ChunkEmbedding.organization_id == org_id,
-            ChunkEmbedding.profile == pr,
+            VectorEntry.organization_id == org_id,
+            VectorEntry.profile == pr,
         )
     )
-    if db.scalar(stmt.with_only_columns(Document.id).limit(1)) is None:
+    eligible = list(db.scalars(stmt.with_only_columns(Document.id)))
+    if not eligible:
         return []
-    vector = client.embeddings([query])[0]
-    if db.bind.dialect.name == "postgresql":
-        stmt = stmt.order_by(
-            cast(ChunkEmbedding.vector, Vector(1536)).cosine_distance(vector)
-        ).limit(60)
-    rows = db.execute(stmt).all()
+    store = QdrantStore(config, pr, vector_transport)
+    try:
+        scope = store.scoped_filter(org_id, pr, eligible)
+        if not store.count(scope):
+            raise ModelError("vector_index_missing")
+        vector = client.embeddings([query])[0]
+        matches = store.query(vector, scope)
+    finally:
+        store.close()
+    # Treat remote payloads as untrusted: authorize every candidate again in SQL.
+    candidates = {}
+    for point in matches:
+        payload = point.get("payload", {})
+        if (
+            payload.get("organization_id") == org_id
+            and payload.get("profile") == pr
+            and payload.get("document_id") in eligible
+            and valid_vector(point.get("vector"))
+        ):
+            candidates[str(point.get("id"))] = point
+    if not candidates:
+        return []
+    rows = db.execute(stmt.where(VectorEntry.point_id.in_(candidates))).all()
     scored = []
     for row, d in rows:
-        if row.text_hash != text_hash(d):
+        point = candidates.get(row.point_id)
+        if (
+            not point
+            or row.text_hash != text_hash(d)
+            or point["payload"].get("text_hash") != row.text_hash
+        ):
             continue
-        cosine = sum(a * b for a, b in zip(vector, row.vector))
+        retrieved_vector = point["vector"]
+        norm = math.sqrt(
+            sum(a * a for a in vector) * sum(b * b for b in retrieved_vector)
+        )
+        cosine = sum(a * b for a, b in zip(vector, retrieved_vector)) / norm
         if cosine < 0.20:
             continue
         lexical = len(terms(query) & terms(d.title + " " + d.text))
-        scored.append((cosine + min(lexical, 5) * 0.015, row, d, cosine))
+        normalized = [
+            v / math.sqrt(sum(a * a for a in retrieved_vector))
+            for v in retrieved_vector
+        ]
+        scored.append((cosine + min(lexical, 5) * 0.015, normalized, d, cosine))
     # Maximal marginal relevance avoids filling the context with near-identical chunks.
     selected = []
     while scored and len(selected) < limit:
@@ -299,10 +387,7 @@ def search(db, config, client, org_id, query, limit=6):
             key=lambda x: 0.8 * x[0]
             - 0.2
             * max(
-                (
-                    sum(a * b for a, b in zip(x[1].vector, y[1].vector))
-                    for y in selected
-                ),
+                (sum(a * b for a, b in zip(x[1], y[1])) for y in selected),
                 default=0,
             ),
         )

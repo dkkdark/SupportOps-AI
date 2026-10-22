@@ -25,6 +25,12 @@ class Settings(BaseSettings):
     verifier_model: str = "gpt-5.4-mini"
     embedding_provider: str = "openai"
     embedding_model: str = "text-embedding-3-large"
+    qdrant_url: str = "http://127.0.0.1:6333"
+    qdrant_api_key: str = ""
+    qdrant_collection: str = Field(
+        default="supportops", pattern=r"^[a-zA-Z0-9_-]{1,80}$"
+    )
+    qdrant_timeout_seconds: float = Field(default=10, ge=1, le=60)
     agent_max_turns: int = Field(default=6, ge=2, le=10)
     agent_max_tools: int = Field(default=8, ge=1, le=20)
     agent_timeout_seconds: float = Field(default=120, ge=10, le=240)
