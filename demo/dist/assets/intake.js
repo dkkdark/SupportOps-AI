@@ -6,6 +6,7 @@ const esc = (x) =>
   );
 const slug = location.pathname.split('/').filter(Boolean).at(-1);
 let widget;
+let submission = null;
 try {
   const r = await fetch('/api/forms/' + encodeURIComponent(slug), { credentials: 'omit' });
   const config = await r.json();
@@ -25,10 +26,17 @@ try {
     const form = e.target,
       button = form.querySelector('button'),
       error = form.querySelector('.form-error');
+    if (button.disabled) return;
     button.disabled = true;
     error.textContent = '';
     try {
       const data = Object.fromEntries(new FormData(form));
+      delete data['cf-turnstile-response'];
+      const content = JSON.stringify(data);
+      if (!submission || submission.content !== content)
+        submission = { content, id: crypto.randomUUID() };
+      // Reuse the same ID if a response is lost after the server accepted it.
+      data.external_id = submission.id;
       data.captcha_token = widget !== undefined ? window.turnstile.getResponse(widget) : '';
       const response = await fetch('/api/forms/' + encodeURIComponent(slug), {
         method: 'POST',

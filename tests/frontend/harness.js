@@ -26,13 +26,20 @@ export function ticket(id, extra = {}) {
     ...extra,
   };
 }
-export async function workspace(t, { hash = 'tickets', intercept } = {}) {
+export async function workspace(
+  t,
+  { hash = 'tickets', intercept, authenticated = true, config = {}, setupWindow } = {},
+) {
   const dom = new JSDOM(
     '<meta name="supportops-mode" content="api"><div id="app"></div><div id="overlay"></div><div id="toasts"></div>',
     { url: 'http://localhost/#' + hash, runScripts: 'outside-only', pretendToBeVisual: true },
   );
   t.after(() => dom.window.close());
   const w = dom.window;
+  setupWindow?.(w);
+  w.HTMLElement.prototype.scrollIntoView = function () {
+    w.lastScrolledId = this.id;
+  };
   w.scrollTo = ({ left, top }) => {
     w.scrollX = left;
     w.scrollY = top;
@@ -68,9 +75,11 @@ export async function workspace(t, { hash = 'tickets', intercept } = {}) {
       });
     let result;
     if (path === '/config')
-      result = { provider: 'baseline', demo_release: true, demo_ai_budget_usd: 5 };
-    else if (path === '/auth/me') result = account();
-    else if (path === '/auth/switch') {
+      result = { provider: 'baseline', demo_release: true, demo_ai_budget_usd: 5, ...config };
+    else if (path === '/auth/me') {
+      if (!authenticated) return new Response('{"detail":"Sign in required"}', { status: 401 });
+      result = account();
+    } else if (path === '/auth/switch') {
       organization = body.organization_id;
       result = {};
     } else if (path === '/tickets') result = records[org];

@@ -294,6 +294,10 @@ function render() {
   viewState.render(`${workspace}:${page}`, renderContent);
 }
 function renderContent() {
+  if (signupWidget != null && window.turnstile) {
+    window.turnstile.remove(signupWidget);
+    signupWidget = null;
+  }
   clearTimeout(indexingPoll);
   if (
     location.hash === '#forgot' ||
@@ -862,6 +866,8 @@ async function handlePlatformSubmit(form) {
     render();
     toast('Changes saved');
   } catch (e) {
+    if (form.id === 'platform-auth' && signupWidget != null && window.turnstile)
+      window.turnstile.reset(signupWidget);
     if (error) error.textContent = e.message;
     else fail(e);
   } finally {
@@ -1040,6 +1046,10 @@ function typeEditor(id) {
 }
 async function businessAction(el) {
   if (el.dataset.scrollto) {
+    if (!document.getElementById(el.dataset.scrollto)) {
+      history.pushState(null, '', account ? '#home' : '#register');
+      render();
+    }
     document
       .getElementById(el.dataset.scrollto)
       ?.scrollIntoView({ behavior: 'smooth', block: 'start' });

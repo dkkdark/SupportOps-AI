@@ -29,6 +29,17 @@ def test_create_validation_and_idempotency(client, payload):
     assert client.get("/api/tickets/nonexistent").status_code == 404
 
 
+def test_browser_assets_revalidate_after_deployment(client):
+    for path in ("/", "/assets/app.js", "/assets/style.css", "/assets/view-state.js"):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert response.headers["Cache-Control"] == "no-cache"
+        if "etag" in response.headers:
+            cached = client.get(path, headers={"If-None-Match": response.headers["etag"]})
+            assert cached.headers["Cache-Control"] == "no-cache"
+    assert client.get("/api/tickets").headers["Cache-Control"] == "no-store"
+
+
 def test_auth_and_faults_disabled(tmp_path, orders):
     app = create_app(
         Settings(database_url=f"sqlite:///{tmp_path}/auth.db"),

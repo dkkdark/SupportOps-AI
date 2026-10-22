@@ -237,6 +237,11 @@ def create_app(
         response.headers["Referrer-Policy"] = "same-origin"
         if request.url.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
+        elif request.url.path.startswith("/assets/") or "text/html" in response.headers.get(
+            "content-type", ""
+        ):
+            # Assets have stable filenames, so deployments must revalidate them.
+            response.headers["Cache-Control"] = "no-cache"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'"
         )
