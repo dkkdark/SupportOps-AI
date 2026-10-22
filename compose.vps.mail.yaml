@@ -1,0 +1,20 @@
+# Account verification and recovery mail for the private VPS profile.
+x-mail-environment: &mail-environment
+  SMTP_HOST: smtp.gmail.com
+  SMTP_PORT: "587"
+  SMTP_USER: info.xenonimus@gmail.com
+  SMTP_PASSWORD: ${SMTP_PASSWORD:?Set SMTP_PASSWORD in the server environment file}
+  SMTP_FROM: SupportOps AI <info.xenonimus@gmail.com>
+  SMTP_STARTTLS: "true"
+  SMTP_SSL: "false"
+  SUPPORT_EMAIL: info.xenonimus@gmail.com
+
+services:
+  app:
+    environment: *mail-environment
+
+  worker:
+    environment: *mail-environment
+    networks:
+      - private
+      - access
