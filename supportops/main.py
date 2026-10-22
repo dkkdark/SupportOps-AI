@@ -237,9 +237,9 @@ def create_app(
         response.headers["Referrer-Policy"] = "same-origin"
         if request.url.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
-        elif request.url.path.startswith("/assets/") or "text/html" in response.headers.get(
-            "content-type", ""
-        ):
+        elif request.url.path.startswith(
+            "/assets/"
+        ) or "text/html" in response.headers.get("content-type", ""):
             # Assets have stable filenames, so deployments must revalidate them.
             response.headers["Cache-Control"] = "no-cache"
         response.headers["Content-Security-Policy"] = (
@@ -320,6 +320,11 @@ def create_app(
             "mode": "api",
             "registration_available": registration_available,
             "registration_limit": config.registration_limit,
+            "public_forms_available": config.public_intake_enabled
+            and (
+                config.app_env != "production"
+                or bool(config.turnstile_site_key and config.turnstile_secret_key)
+            ),
             "demo_release": config.demo_release,
             "demo_ai_budget_usd": config.demo_ai_budget_usd,
             "provider": config.model_provider,

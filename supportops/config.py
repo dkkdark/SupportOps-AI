@@ -50,8 +50,9 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = ""
     stripe_starter_price_id: str = ""
     stripe_growth_price_id: str = ""
-    legal_business_name: str = ""
-    legal_contact_email: str = ""
+    legal_business_name: str = "Kseniia Blokhina"
+    legal_country: str = "Germany"
+    legal_contact_email: str = "info.xenonimus@gmail.com"
     legal_terms_url: str = ""
     legal_privacy_url: str = ""
     legal_documents_approved: bool = False

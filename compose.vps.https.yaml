@@ -2,6 +2,9 @@
 x-public-environment: &public-environment
   APP_ENV: production
   REGISTRATION_LIMIT: "10"
+  LEGAL_BUSINESS_NAME: ${LEGAL_BUSINESS_NAME:-Kseniia Blokhina}
+  LEGAL_COUNTRY: ${LEGAL_COUNTRY:-Germany}
+  LEGAL_CONTACT_EMAIL: ${LEGAL_CONTACT_EMAIL:-info.xenonimus@gmail.com}
   PUBLIC_BASE_URL: https://${APP_DOMAIN:-app.xenonimus.com}
   REQUIRE_VERIFIED_EMAIL: "true"
   ALLOW_DEMO_SIGNUP: "false"

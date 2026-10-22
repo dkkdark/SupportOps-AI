@@ -1,6 +1,5 @@
-"""Owner launch checks, workspace exports and transparent operator policy drafts."""
+"""Workspace service checks, exports and public policy pages."""
 
-import html
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -40,29 +39,29 @@ def launch_router(auth, sessions, config):
                 {
                     "name": "OpenAI models",
                     "ready": bool(config.openai_api_key or config.llm_api_key),
-                    "action": "Set OPENAI_API_KEY and verify your model access.",
+                    "action": "AI investigation, knowledge embeddings and reply verification.",
                 },
                 {
                     "name": "Public HTTPS address",
                     "ready": config.public_base_url.startswith("https://"),
-                    "action": "Set PUBLIC_BASE_URL to your certificate-matching domain.",
+                    "action": "A secure address for sign-in, verification and recovery links.",
                 },
                 {
                     "name": "Database",
-                    "ready": config.database_url.startswith("postgresql"),
-                    "action": "Use private PostgreSQL for business records and back up app and checkpoint tables. Semantic vectors are stored separately in Qdrant.",
+                    "ready": config.database_url.startswith(("postgresql", "sqlite")),
+                    "action": "Persistent business records and workflow progress.",
                 },
                 {
                     "name": "Qdrant vector search",
                     "ready": bool(config.qdrant_url),
-                    "action": "Configure a private QDRANT_URL, protect access and verify /health/vector. Back up Qdrant storage separately.",
+                    "action": "A separate knowledge index for each business's current documents.",
                 },
                 {
                     "name": "Email verification and recovery",
                     "ready": mail["ready"],
-                    "action": "Configure SMTP: " + ", ".join(mail["missing"])
+                    "action": "Email delivery is temporarily unavailable. Contact support."
                     if mail["missing"]
-                    else "SMTP settings are complete. Verify delivery with your own mailbox.",
+                    else "Account verification and password recovery emails.",
                 },
                 *(
                     []
@@ -77,7 +76,7 @@ def launch_router(auth, sessions, config):
                                 and config.stripe_growth_price_id
                                 and config.stripe_scale_price_id
                             ),
-                            "action": "Configure Stripe products, prices, webhook signing secret and Customer Portal.",
+                            "action": "Purchasing and subscription management.",
                         },
                     ]
                 ),
@@ -86,15 +85,19 @@ def launch_router(auth, sessions, config):
                     "ready": bool(
                         config.turnstile_site_key and config.turnstile_secret_key
                     ),
-                    "action": "Configure Turnstile keys for your public domain.",
+                    "action": "Verification of registration and public-form requests.",
                 },
                 {
                     "name": "Operator and policies",
-                    "ready": legal_ready(config),
-                    "action": "Complete the operator details, publish your reviewed terms/privacy/refund policies, then set LEGAL_DOCUMENTS_APPROVED=true.",
+                    "ready": bool(
+                        config.legal_business_name
+                        and config.legal_country
+                        and config.legal_contact_email
+                    ),
+                    "action": "Published service terms, privacy notice and support contact.",
                 },
             ],
-            "note": "Configuration checks do not prove cloud deployment, valid credentials, email delivery, legal suitability or successful payment processing. Complete the launch acceptance steps.",
+            "note": "Configuration status only; connection and delivery checks are separate.",
         }
 
     @router.get("/api/email/status")
@@ -143,96 +146,15 @@ def launch_router(auth, sessions, config):
             )
 
     def policy(kind):
-        if legal_ready(config):
-            return RedirectResponse(
-                config.legal_privacy_url
-                if kind == "privacy"
-                else config.legal_terms_url,
-                status_code=307,
-            )
-        operator = config.legal_business_name or "[Service operator — to be completed]"
-        contact = config.legal_contact_email or config.support_email
-        title = "Privacy notice" if kind == "privacy" else "Service terms"
-        paragraphs = (
-            [
-                ("Who operates this service", operator + ". Contact: " + contact + "."),
-                (
-                    "Information processed",
-                    "Business account and membership information, incoming request content, knowledge documents, templates, workflow results, audit history and usage/billing identifiers are stored to operate the workspace.",
-                ),
-                (
-                    "AI processing",
-                    "When AI is used, relevant request text, knowledge excerpts and templates are sent to OpenAI for embeddings, investigation and verification. The application requests store:false for Responses calls. This setting does not by itself define the provider’s complete data-retention policy.",
-                ),
-                (
-                    "Payments and email",
-                    "This demo does not offer payments. Future paid releases can use Stripe for hosted checkout and subscription management; this application does not receive full payment-card data. A configured email provider delivers verification and recovery messages. Public forms can use Cloudflare Turnstile for spam protection.",
-                ),
-                (
-                    "Business control and requests",
-                    "The workspace owner controls team access and can export workspace records. Contact the operator for access, correction or deletion requests. The operator must publish retention periods, subprocessors, hosting regions, lawful bases and any applicable international-transfer arrangements before launch.",
-                ),
-            ]
-            if kind == "privacy"
-            else [
-                (
-                    "Service and accounts",
-                    "SupportOps provides business request intake, knowledge retrieval, AI proposals, routing and human review. Workspace owners are responsible for authorized team access and the information they submit.",
-                ),
-                (
-                    "Demo AI allowance"
-                    if config.demo_release
-                    else "Plans and AI credits",
-                    f"This is a demo release with a one-time ${config.demo_ai_budget_usd:.2f} AI allowance per user account across all workspaces. Calls to paid AI models, including indexing and verification, use this allowance. Paid AI operations pause when the allowance is used; manual workspace features remain available. Model costs use configured token prices. Unknown provider charges retain a reservation for reconciliation. Purchasing is not currently available."
-                    if config.demo_release
-                    else "Subscriptions apply per workspace. Credits cover model use including indexing and verification; use varies with token volume and agent work. A temporary reservation is reconciled after processing. Unknown provider charges may require reconciliation.",
-                ),
-                (
-                    "Human decisions",
-                    "AI outputs can be incomplete or incorrect. An authorized person must review results before relying on them or taking external actions. The service does not automatically send replies, issue payments, approve sensitive decisions or change external business records.",
-                ),
-                (
-                    "Launch notifications"
-                    if config.demo_release
-                    else "Subscriptions and cancellation",
-                    "When an account reaches its demo AI limit, or its user requests a launch notification, the account is marked for an email when purchasing becomes available. No launch email has been sent automatically. Contact the operator to withdraw a notification request."
-                    if config.demo_release
-                    else "Owners use the configured Stripe Customer Portal to manage a subscription. The operator must publish cancellation timing, refund rules, support commitments, taxes and applicable mandatory rights before accepting paid customers.",
-                ),
-                (
-                    "Operator details and legal terms",
-                    operator
-                    + ". Contact: "
-                    + contact
-                    + ". The operator must complete governing law, dispute handling, acceptable use, liability and business-specific terms with appropriate legal review.",
-                ),
-            ]
+        from supportops.policies import render_policy
+
+        target = (
+            config.legal_privacy_url if kind == "privacy" else config.legal_terms_url
         )
-        content = "".join(
-            "<section><h2>"
-            + html.escape(h)
-            + "</h2><p>"
-            + html.escape(p)
-            + "</p></section>"
-            for h, p in paragraphs
-        )
-        draft = (
-            ""
-            if config.legal_documents_approved
-            and config.legal_business_name
-            and config.legal_contact_email
-            else '<div class="notice-card">Draft for operator review. Business details and jurisdiction-specific policies must be completed before public paid launch.</div>'
-        )
-        return HTMLResponse(
-            '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>'
-            + title
-            + ' · SupportOps</title><link rel="stylesheet" href="/assets/style.css"></head><body><main class="policy-document"><a href="/">← SupportOps AI</a><h1>'
-            + title
-            + "</h1>"
-            + draft
-            + content
-            + "</main></body></html>"
-        )
+        local_url = config.public_base_url.rstrip("/") + "/" + kind
+        if legal_ready(config) and target.rstrip("/") != local_url:
+            return RedirectResponse(target, status_code=307)
+        return HTMLResponse(render_policy(config, kind))
 
     @router.get("/privacy")
     def privacy():

@@ -5,6 +5,14 @@ import vm from 'node:vm';
 import { JSDOM } from 'jsdom';
 import { workspace, flush, deferred } from './harness.js';
 
+test('disabled public forms offer an API connection instead of a nonworking form', async (t) => {
+  const ui = await workspace(t, { hash: 'sources', config: { public_forms_available: false } });
+  await ui.click('[data-action="new-intake"]');
+  const select = ui.document.querySelector('#intake-form select[name="kind"]');
+  assert.equal(select.value, 'api');
+  assert.equal(select.querySelector('option[value="form"]').disabled, true);
+});
+
 test('full registration shows availability notice while sign-in remains usable', async (t) => {
   const ui = await workspace(t, {
     hash: 'register',
