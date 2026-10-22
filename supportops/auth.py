@@ -21,6 +21,7 @@ from fastapi import (
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
+from supportops.registration import lock as lock_registration, require_capacity
 from supportops.db import (
     AuditEvent,
     AuthThrottle,
@@ -334,6 +335,8 @@ class Auth:
             response: Response,
             tasks: BackgroundTasks,
         ):
+            with self.sessions() as db:
+                require_capacity(db, self.config.registration_limit)
             self.throttle(request, "register", limit=10)
             if (
                 self.config.app_env == "production"
@@ -343,11 +346,13 @@ class Auth:
 
                 verify(self.config, body.captcha_token, request)
             with self.sessions() as db:
+                lock_registration(db)
                 if db.scalar(select(User).where(User.email == body.email)):
                     raise HTTPException(
                         409,
                         "An account with this email already exists. Sign in instead.",
                     )
+                require_capacity(db, self.config.registration_limit)
                 user = User(
                     id=identifier(),
                     name=body.name,
@@ -411,6 +416,8 @@ class Auth:
                 raise HTTPException(404, "Demo sign-in is disabled.")
             self.throttle(request, "demo", limit=20)
             with self.sessions() as db:
+                lock_registration(db)
+                require_capacity(db, self.config.registration_limit)
                 user = User(
                     id=identifier(),
                     name="Alex Morgan",
@@ -654,6 +661,7 @@ class Auth:
         def accept(body: AcceptInviteInput, request: Request, response: Response):
             self.throttle(request, "accept", limit=15)
             with self.sessions() as db:
+                lock_registration(db)
                 invitation = db.scalar(
                     select(Invitation).where(
                         Invitation.token_hash == digest(body.token)
@@ -682,6 +690,7 @@ class Auth:
                             401, "Enter the password for your existing account."
                         )
                 else:
+                    require_capacity(db, self.config.registration_limit)
                     user = User(
                         id=identifier(),
                         name=body.name,

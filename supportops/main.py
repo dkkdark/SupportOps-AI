@@ -311,9 +311,15 @@ def create_app(
     @app.get("/api/config")
     def public_config():
         from supportops.mailer import email_status
+        from supportops.registration import available
+
+        with sessions() as db:
+            registration_available = available(db, config.registration_limit)
 
         return {
             "mode": "api",
+            "registration_available": registration_available,
+            "registration_limit": config.registration_limit,
             "demo_release": config.demo_release,
             "demo_ai_budget_usd": config.demo_ai_budget_usd,
             "provider": config.model_provider,

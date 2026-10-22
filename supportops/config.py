@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     demo_ai_budget_usd: float = Field(default=5.0, gt=0, le=100)
     session_days: int = 7
     allow_demo_signup: bool = False
+    registration_limit: int = Field(default=10, ge=0, le=10000)
     database_url: str = "sqlite:///./var/supportops.db"
     db_host: str = ""
     db_name: str = "supportops"

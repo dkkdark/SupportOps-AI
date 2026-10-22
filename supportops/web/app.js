@@ -617,6 +617,8 @@ function resetWorkspace() {
 function publicPage() {
   const join = location.hash.startsWith('#join/');
   const mode = join ? 'join' : location.hash === '#login' ? 'login' : 'register';
+  const registrationClosed =
+    !account && mode === 'register' && config.registration_available === false;
   document.title = 'SupportOps AI · Support that knows your business';
   const page = `<div class="public-shell"><header class="public-header"><a class="brand" href="#register"><span class="brand-mark">${icon('logo')}</span><span>SupportOps</span><em>AI</em></a><nav class="landing-nav"><a href="#how-it-works" data-scrollto="how-it-works">How it works</a><a href="#request-sources" data-scrollto="request-sources">Channels</a><a href="#${config.demo_release ? 'demo-access' : 'pricing'}" data-scrollto="${config.demo_release ? 'demo-access' : 'pricing'}">${config.demo_release ? 'Demo access' : 'Pricing'}</a></nav><a class="btn" href="${account ? '#tickets' : mode === 'login' ? '#register' : '#login'}">${account ? 'Open workspace' : mode === 'login' ? 'Create a workspace' : 'Sign in'} ${icon('arrow')}</a></header><main class="welcome-grid"><section class="welcome-story"><span class="eyebrow">${config.demo_release ? 'DEMO VERSION · ' : ''}YOUR BUSINESS. YOUR KNOWLEDGE.</span><h1>Every request. <br>The right context. <br><em>A clearer next step.</em></h1><p>An AI workspace for the requests that keep your business moving. Connect incoming work, bring your knowledge and keep your people in control.</p><div class="welcome-steps">${[
     ['01', 'Bring your knowledge', 'Upload your rules, procedures and service policies.'],
@@ -627,12 +629,18 @@ function publicPage() {
     .join(
       '',
     )}</div><div class="welcome-proof">${icon('shield')}A separate workspace for every business.<br>Your team decides what reaches your customers.</div></section><section class="signup-card" id="signup"><span class="badge badge-review">${icon(join ? 'human' : 'spark')}${join ? 'You’re invited' : mode === 'login' ? 'Welcome back' : 'A fresh start for your team'}</span><h2>${account ? 'Your business workspace' : join ? 'Join your team' : mode === 'login' ? 'Sign in to your workspace' : 'Create your workspace'}</h2><p>${join ? 'Use the email address your invitation was sent to. Already have an account? Enter your existing password.' : mode === 'login' ? 'Your policies, tickets and team are right where you left them.' : 'Start with your business. Add your knowledge as you go.'}</p><form id="platform-auth" data-mode="${mode}">${mode !== 'login' ? '<label class="field">Your full name<input name="name" required minlength="2" maxlength="100" autocomplete="name" placeholder="Alex Morgan"></label>' : ''}${mode === 'register' ? '<label class="field">Business name<input name="business_name" required minlength="2" maxlength="120" autocomplete="organization" placeholder="Acme Services"></label><label class="field">Industry<input name="industry" maxlength="80" placeholder="e.g. Hospitality, consulting, retail" value=""></label>' : ''}<label class="field">Work email<input name="email" type="email" required maxlength="160" autocomplete="email" placeholder="alex@yourcompany.com"></label><label class="field">Password<input name="password" type="password" required minlength="${mode === 'login' ? 1 : 12}" maxlength="128" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}" placeholder="${mode === 'login' ? 'Your password' : 'At least 12 characters'}"></label>${mode === 'register' && config.captcha_site_key && !account ? '<div id="signup-captcha"></div>' : ''}<div class="form-error" role="alert"></div><button class="btn btn-primary auth-submit" type="submit">${join ? 'Accept invitation' : mode === 'login' ? 'Sign in' : 'Create workspace'} ${icon('arrow')}</button></form>${mode === 'login' ? '<a class="forgot-link" href="#forgot">Forgot your password?</a>' : ''}${config.demo_available && !join && !account ? '<div class="auth-divider"><span>Want a look around first?</span></div><button class="btn auth-submit" data-action="start-demo">Explore a sample workspace</button><p class="auth-footnote">A separate demo with synthetic tickets. Your business starts with a clean workspace.</p>' : ''}<p class="auth-footnote">${join ? 'Your workspace owner sets your role and access.' : mode === 'login' ? 'Need access to a team? Ask your workspace owner for an invitation link.' : 'You’ll be the workspace owner. Invite your team whenever you’re ready.'}</p></section></main>${mode === 'register' ? landingSections() : ''}<footer class="public-footer"><span>SupportOps AI</span><span><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · Your people in control.</span></footer></div>`;
-  return account
+  const visiblePage = registrationClosed
     ? page.replace(
+        /<section class="signup-card" id="signup">[\s\S]*?<\/section><\/main>/,
+        `<section class="signup-card" id="signup"><span class="badge">Limited early access</span><h2>Registration is currently unavailable</h2><p>All places in this demo release are taken. Please check back later.</p><p>Existing users can continue using their workspaces.</p><a class="btn btn-primary auth-submit" href="#login">Sign in ${icon('arrow')}</a></section></main>`,
+      )
+    : page;
+  return account
+    ? visiblePage.replace(
         /<form id="platform-auth"[\s\S]*?<\/form>/,
         `<div class="account-welcome"><h3>Welcome back, ${esc(account.user.name)}</h3><p>Your workspace is ready.</p><a class="btn btn-primary auth-submit" href="#tickets">Open ${esc(account.organization?.name || 'workspace')} ${icon('arrow')}</a></div>`,
       )
-    : page;
+    : visiblePage;
 }
 
 function onboarding() {
@@ -879,6 +887,16 @@ async function handlePlatformSubmit(form) {
     render();
     toast('Changes saved');
   } catch (e) {
+    if (
+      form.id === 'platform-auth' &&
+      form.dataset.mode === 'register' &&
+      e.status === 503 &&
+      e.message.startsWith('Registration is currently unavailable.')
+    ) {
+      config.registration_available = false;
+      render();
+      return true;
+    }
     if (form.id === 'platform-auth' && signupWidget != null && window.turnstile)
       window.turnstile.reset(signupWidget);
     if (error) error.textContent = e.message;

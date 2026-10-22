@@ -1,6 +1,7 @@
 # Public HTTPS endpoint; signup fails closed until real Turnstile keys are set.
 x-public-environment: &public-environment
   APP_ENV: production
+  REGISTRATION_LIMIT: "10"
   PUBLIC_BASE_URL: https://${APP_DOMAIN:-app.xenonimus.com}
   REQUIRE_VERIFIED_EMAIL: "true"
   ALLOW_DEMO_SIGNUP: "false"

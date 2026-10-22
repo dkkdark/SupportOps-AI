@@ -5,6 +5,52 @@ import vm from 'node:vm';
 import { JSDOM } from 'jsdom';
 import { workspace, flush, deferred } from './harness.js';
 
+test('full registration shows availability notice while sign-in remains usable', async (t) => {
+  const ui = await workspace(t, {
+    hash: 'register',
+    authenticated: false,
+    config: { registration_available: false, captcha_site_key: 'synthetic-key' },
+  });
+  assert.match(
+    ui.document.getElementById('signup').textContent,
+    /Registration is currently unavailable/,
+  );
+  assert.equal(ui.document.getElementById('platform-auth'), null);
+  assert.equal(ui.document.getElementById('signup-captcha'), null);
+  await ui.route('login');
+  assert.equal(ui.document.getElementById('platform-auth').dataset.mode, 'login');
+});
+
+test('last-slot race replaces a stale signup form with the closed notice', async (t) => {
+  const ui = await workspace(t, {
+    hash: 'register',
+    authenticated: false,
+    config: { registration_available: true },
+    intercept: ({ path }) =>
+      path === '/auth/register'
+        ? {
+            status: 503,
+            body: { detail: 'Registration is currently unavailable. Please check back later.' },
+          }
+        : undefined,
+  });
+  const form = ui.document.getElementById('platform-auth');
+  for (const [name, value] of Object.entries({
+    name: 'Alex Morgan',
+    business_name: 'Acme',
+    email: 'alex@example.test',
+    password: 'Synthetic password 123!',
+  }))
+    form.elements[name].value = value;
+  form.dispatchEvent(new ui.window.Event('submit', { bubbles: true, cancelable: true }));
+  await flush();
+  assert.equal(ui.document.getElementById('platform-auth'), null);
+  assert.match(
+    ui.document.getElementById('signup').textContent,
+    /Registration is currently unavailable/,
+  );
+});
+
 test('landing section links work from the sign-in page', async (t) => {
   const ui = await workspace(t, { hash: 'login', authenticated: false });
   assert.equal(ui.document.getElementById('how-it-works'), null);
