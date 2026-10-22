@@ -2,7 +2,9 @@
 
 A multi-tenant AI platform for business requests across operations, sales, internal services, IT and customer-facing teams. Each business has an isolated workspace with its own knowledge, employees, request types and response templates.
 
-![SupportOps AI request workspace](docs/preview.png)
+![SupportOps platform](docs/preview.png)
+
+![SupportOps AI request workspace](docs/request-workspace.png)
 
 ## Core capabilities
 
