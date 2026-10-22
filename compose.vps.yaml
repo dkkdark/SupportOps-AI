@@ -1,0 +1,131 @@
+# Private, offline bootstrap before configuring a domain and HTTPS.
+# Reach the loopback port through SSH. This is not the public production profile.
+name: supportops-vps
+
+x-runtime: &runtime
+  image: supportops-vps:local
+  build: .
+  init: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+  networks:
+    - private
+
+x-environment: &environment
+  APP_ENV: development
+  DATABASE_URL: sqlite:////app/var/supportops.db
+  PUBLIC_BASE_URL: http://localhost:18010
+  DEMO_RELEASE: "true"
+  DEMO_AI_BUDGET_USD: "5"
+  MODEL_PROVIDER: baseline
+  EMBEDDING_PROVIDER: baseline
+  OPENAI_API_KEY: ""
+  LLM_API_KEY: ""
+  SMTP_HOST: ""
+  SMTP_PASSWORD: ""
+  STRIPE_SECRET_KEY: ""
+  SUPPORT_EMAIL: info.xenonimus@gmail.com
+  QDRANT_URL: http://qdrant:6333
+  QDRANT_COLLECTION: supportops
+  ORDERS_API_URL: http://orders:8000
+  PUBLIC_INTAKE_ENABLED: "false"
+  FAULT_INJECTION_ENABLED: "false"
+  CODE_VERSION: vps-private-bootstrap
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.19.0
+    volumes:
+      - vectors:/qdrant/storage
+    mem_limit: 1g
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - private
+    restart: unless-stopped
+
+  migrate:
+    <<: *runtime
+    command: ["python", "-m", "scripts.migrate"]
+    environment: *environment
+    volumes:
+      - application:/app/var
+    mem_limit: 512m
+    healthcheck:
+      disable: true
+    restart: "no"
+
+  # Synthetic order data is used only by sample workspaces.
+  orders:
+    <<: *runtime
+    command: ["uvicorn", "supportops.orders_api:app", "--host", "0.0.0.0", "--port", "8000"]
+    mem_limit: 256m
+    restart: unless-stopped
+
+  app:
+    <<: *runtime
+    environment: *environment
+    networks:
+      - private
+      - access
+    ports:
+      - "127.0.0.1:8010:8000"
+    volumes:
+      - application:/app/var
+    mem_limit: 768m
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      orders:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    restart: unless-stopped
+
+  worker:
+    <<: *runtime
+    command: ["python", "-m", "scripts.worker"]
+    environment: *environment
+    volumes:
+      - application:/app/var
+    mem_limit: 512m
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-m", "scripts.worker_health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    stop_grace_period: 45s
+    restart: unless-stopped
+
+networks:
+  # A separate bridge lets Docker publish the API's loopback port.
+  access:
+  private:
+    internal: true
+
+volumes:
+  # Business records and LangGraph checkpoints share this persistent volume.
+  application:
+  vectors:
