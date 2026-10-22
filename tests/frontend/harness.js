@@ -71,7 +71,7 @@ export async function workspace(
     const intercepted = await intercept?.({ path, org, options, body });
     if (intercepted !== undefined)
       return new Response(JSON.stringify(intercepted.body ?? intercepted), {
-        status: intercepted.status || 200,
+        status: typeof intercepted.status === 'number' ? intercepted.status : 200,
       });
     let result;
     if (path === '/config')

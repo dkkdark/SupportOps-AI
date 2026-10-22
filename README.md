@@ -84,10 +84,14 @@ A future launch mailing requires a configured provider, reviewed content and act
 
 ```bash
 make test
+npm ci --ignore-scripts --no-audit --no-fund
+npm test                  # DOM regression tests: navigation, races, forms, CAPTCHA lifecycle
 make eval                 # legacy synthetic retail benchmark only
 python -m scripts.live_acceptance  # opt-in real OpenAI calls; synthetic data; $0.20 run budget
 npm run check:format
 ```
+
+The [local UI verification report](docs/ui-verification.ru.md) records browser checks, responsive layouts and fixed edge cases. CI runs the frontend regression suite alongside backend tests.
 
 A real OpenAI acceptance test passed for an internal travel-expense question: document embedding → semantic search tool → generated policy explanation → separate grounding check → saved human approval. Its agent/query/review calls cost approximately **$0.00354 in that one run**, excluding initial document indexing. This is not an average-cost or production-accuracy benchmark. Controlled tests additionally cover bad citations, model rejection, indexing failures/retry, tenant boundaries, inbound channels, quotas, Stripe signatures/lifecycle and recovery tokens.
 

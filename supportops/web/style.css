@@ -1861,7 +1861,9 @@ h1 {
     margin: 18px 4px;
   }
   .profile {
-    padding: 16px 9px 0;
+    padding: 16px 0 0;
+    flex-direction: column;
+    gap: 8px;
   }
   .workbench {
     grid-template-columns: 235px minmax(0, 1fr);

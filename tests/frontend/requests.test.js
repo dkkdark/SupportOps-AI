@@ -92,3 +92,71 @@ test('knowledge search preserves keyboard focus and cursor while repainting', as
   assert.equal(ui.document.activeElement.id, 'doc-search');
   assert.equal(ui.document.activeElement.selectionStart, 4);
 });
+
+test('repeated clicks cannot start overlapping workspace switches', async (t) => {
+  const slow = deferred();
+  const ui = await workspace(t, {
+    hash: 'settings',
+    intercept: ({ path }) => (path === '/auth/switch' ? slow.promise : undefined),
+  });
+  await ui.click('[data-switch="b"]');
+  await ui.click('[data-switch="b"]');
+  assert.equal(ui.requests.filter((r) => r.path === '/auth/switch').length, 1);
+  slow.resolve(undefined);
+  await flush();
+  assert.match(ui.document.querySelector('.workspace').textContent, /Business B/);
+});
+
+test('a request form cannot submit twice while the first response is pending', async (t) => {
+  const slow = deferred();
+  const ui = await workspace(t, {
+    intercept: ({ path, options }) =>
+      path === '/tickets' && options.method === 'POST' ? slow.promise : undefined,
+  });
+  await ui.click('[data-action="new"]');
+  const form = ui.document.getElementById('ticket-form');
+  const submit = () =>
+    form.dispatchEvent(new ui.window.Event('submit', { bubbles: true, cancelable: true }));
+  submit();
+  submit();
+  await flush();
+  assert.equal(ui.requests.filter((r) => r.path === '/tickets' && r.method === 'POST').length, 1);
+  ui.records.a.unshift(ticket('A3'));
+  slow.resolve(ticket('A3'));
+  await flush();
+  assert.equal(ui.document.querySelector('.ticket-title').textContent, 'Request A3');
+});
+
+test('another request shows a disabled analysis action rather than a misleading spinner', async (t) => {
+  const slow = deferred();
+  const ui = await workspace(t, {
+    intercept: ({ path }) => (path === '/tickets/A1/analyze' ? slow.promise : undefined),
+  });
+  await ui.click('[data-action="analyze"]');
+  await ui.click('[data-ticket="A2"]');
+  assert.equal(ui.document.querySelector('.loading-line'), null);
+  assert.equal(ui.document.querySelector('[data-action="analyze"]').disabled, true);
+  slow.resolve(ticket('A1'));
+  await flush();
+  assert.equal(ui.document.querySelector('[data-action="analyze"]').disabled, false);
+});
+
+test('a failed refresh from a previous workspace does not show an error in the current business', async (t) => {
+  const slow = deferred();
+  let delay = false;
+  const ui = await workspace(t, {
+    hash: 'monitoring',
+    intercept: ({ path, org }) =>
+      delay && org === 'a' && path === '/tickets' ? slow.promise : undefined,
+  });
+  delay = true;
+  await ui.click('[data-action="refresh"]');
+  await ui.route('settings');
+  await ui.click('[data-switch="b"]');
+  slow.resolve({ status: 503, body: { detail: 'Previous business unavailable' } });
+  await flush();
+  assert.ok(
+    !ui.document.getElementById('toasts').textContent.includes('Previous business unavailable'),
+  );
+  assert.equal(ui.document.querySelector('.ticket-title').textContent, 'Request B1');
+});

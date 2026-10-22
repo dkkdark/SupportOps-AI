@@ -206,7 +206,10 @@ async function reload() {
     isDemo ? [] : request('/directory'),
     isDemo ? {} : request('/billing'),
     isDemo ? [] : request('/plans'),
-  ]);
+  ]).catch((error) => {
+    if (workspace !== workspaceToken() || version !== reloadVersion) return [];
+    throw error;
+  });
   if (workspace !== workspaceToken() || version !== reloadVersion) return false;
   Object.assign(state, {
     tickets,
@@ -227,7 +230,17 @@ async function reload() {
   if (!rows.some((t) => t.id === state.selected)) state.selected = rows[0]?.id || null;
   const selected = state.selected;
   const selection = selectionVersion;
-  const detail = selected ? await request('/tickets/' + selected) : null;
+  const detail = selected
+    ? await request('/tickets/' + selected).catch((error) => {
+        if (
+          workspace !== workspaceToken() ||
+          version !== reloadVersion ||
+          selection !== selectionVersion
+        )
+          return null;
+        throw error;
+      })
+    : null;
   if (workspace !== workspaceToken() || version !== reloadVersion) return false;
   if (selected === state.selected && selection === selectionVersion) {
     state.detail = detail;
@@ -426,7 +439,7 @@ function detailContent() {
   return `<div class="detail-top"><div class="ticket-id">${esc(t.id)}<span>•</span>${icon(channelIcon(t.channel))}${{ email: 'Email', chat: 'Chat', web: 'Web form', api: 'Inbound API', internal: 'Internal' }[t.channel] || esc(t.channel)}</div><div class="detail-top-right">${t.priority === 'high' ? '<span class="priority"><i class="priority-dot"></i>High priority</span>' : ''}<button class="icon-btn" data-action="copy-id" title="Copy ticket ID" aria-label="Copy ticket ID">${icon('copy')}</button></div></div><div class="detail-grid"><div class="conversation"><h2 class="ticket-title">${esc(t.subject)}</h2><div class="category-line">${(r?.categories?.length ? r.categories : [t.category]).map((c) => `<span class="category-tag">${categoryNames[c] || esc(c)}</span>`).join('')}${t.order_id ? `<span class="category-tag">Order #${esc(t.order_id)}</span>` : ''}</div><article class="message-card"><div class="message-head"><div class="avatar">${esc(initials(t.customer))}</div><div><strong>${esc(t.customer)}</strong><small>${esc(t.email || 'Requester')}</small></div><time class="message-time">${fmtDate(t.created_at)}</time></div><p>${esc(t.message).replace(/\n/g, '<br>')}</p></article><section class="ai-panel"><div class="ai-heading"><div class="ai-heading-title">${icon('spark')}SupportOps assistant</div><span class="badge">${retailDemo() ? 'Sample workflow' : r?.manifest?.engine === 'openai-agent-v1' ? 'OpenAI agent' : config.provider === 'baseline' ? 'Offline baseline' : 'OpenAI + verification'}</span></div>${state.busy === t.id ? `<div class="loading-line"></div><div class="empty">${icon('refresh', 'spinner')}Investigating the request and gathering evidence…</div>` : !r ? emptyDraft() : analysisContent(t, r)}</section>${reviewActions(t)}<p class="review-caption">${icon('shield')}Replies are never sent to customers automatically</p></div>${contextPanel(t, r)}</div>`;
 }
 function emptyDraft() {
-  return `<div class="empty"><div class="waiting-illustration">${icon('spark')}</div><strong>From a question to a grounded reply</strong>Check the order, find the right policies<br>and prepare a draft with clear sources.<br><button class="btn btn-primary" data-action="analyze" ${config.demo_release && state.billing?.limit_reached && !retailDemo() ? 'disabled title="Demo AI allowance reached"' : ''}>${icon('spark')}Prepare a reply</button></div>`;
+  return `<div class="empty"><div class="waiting-illustration">${icon('spark')}</div><strong>From a question to a grounded reply</strong>Check the order, find the right policies<br>and prepare a draft with clear sources.<br><button class="btn btn-primary" data-action="analyze" ${state.busy ? 'disabled title="Wait for the current analysis to finish"' : config.demo_release && state.billing?.limit_reached && !retailDemo() ? 'disabled title="Demo AI allowance reached"' : ''}>${icon('spark')}Prepare a reply</button></div>`;
 }
 function analysisContent(t, r) {
   return `<div class="detail-tabs" role="tablist" aria-label="Analysis results">${[
@@ -445,7 +458,7 @@ function analysisContent(t, r) {
 }
 function draftContent(t, r) {
   if (r.reason)
-    return `<div class="manual-box">${icon('human')}<b>An agent needs to take a look</b><p>${esc(reasonNames[r.reason] || r.reason)}</p>${r.handoff_reason ? `<p>${esc(r.handoff_reason)}</p>` : ''}${r.verifier?.issues?.length ? `<p>${esc(r.verifier.issues.join(' '))}</p>` : ''}<p style="margin-top:10px;font-size:10px">No verified draft was created. Available context and sources are preserved in this ticket.</p>${!['approved', 'escalated'].includes(t.status) ? `<button class="btn" data-action="analyze" ${config.demo_release && state.billing?.limit_reached && !retailDemo() ? 'disabled title="Demo AI allowance reached"' : ''}>${icon('refresh')}Retry analysis</button>` : ''}</div>`;
+    return `<div class="manual-box">${icon('human')}<b>An agent needs to take a look</b><p>${esc(reasonNames[r.reason] || r.reason)}</p>${r.handoff_reason ? `<p>${esc(r.handoff_reason)}</p>` : ''}${r.verifier?.issues?.length ? `<p>${esc(r.verifier.issues.join(' '))}</p>` : ''}<p style="margin-top:10px;font-size:10px">No verified draft was created. Available context and sources are preserved in this ticket.</p>${!['approved', 'escalated'].includes(t.status) ? `<button class="btn" data-action="analyze" ${state.busy ? 'disabled title="Wait for the current analysis to finish"' : config.demo_release && state.billing?.limit_reached && !retailDemo() ? 'disabled title="Demo AI allowance reached"' : ''}>${icon('refresh')}Retry analysis</button>` : ''}</div>`;
   const latest = (t.reviews || []).findLast?.((x) => x.decision === 'approve');
   const text = state.drafts[t.id] ?? latest?.text ?? r.draft;
   return `<div class="draft-body"><div class="verified-note">${icon('checkcircle')}Facts and policies verified · ready for your review</div>${state.drafts[t.id] && state.drafts[t.id] !== r.draft ? '<div class="revision-note">This draft was edited by an agent. Review any changed facts before approving.</div>' : ''}<label class="sr-only" for="draft-text">Reply draft</label><textarea id="draft-text" class="draft-text" ${t.status === 'approved' || t.status === 'escalated' ? 'readonly' : ''}>${esc(text || '')}</textarea><div class="draft-footer"><span>${icon('clock')}${ms(r.duration_ms)}${isDemo ? ' · simulated' : ''}</span><span>${t.status === 'approved' ? 'Approved by an agent' : 'Edit before approving'}<button class="icon-btn" data-action="copy-draft" aria-label="Copy reply" title="Copy reply">${icon('copy')}</button></span></div></div><div class="sources-inline">Sources${(
