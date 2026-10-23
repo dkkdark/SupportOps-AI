@@ -20,3 +20,4 @@ reports/
 terraform.tfvars
 .openai/*.local.*
 *.egg-info/
+build/

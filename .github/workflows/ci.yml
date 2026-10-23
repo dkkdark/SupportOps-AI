@@ -19,7 +19,7 @@ jobs:
           python-version: '3.13'
       - run: pip install pip-audit==2.10.1 bandit==1.9.4
       - name: Check pinned Python dependencies for known vulnerabilities
-        run: pip-audit -r requirements.lock --no-deps --disable-pip --progress-spinner off
+        run: pip-audit -r requirements.lock -r requirements-build.lock --no-deps --disable-pip --progress-spinner off
       - name: Scan service code for medium and high security findings
         run: bandit -r supportops -ll -q
   checks:
@@ -48,8 +48,10 @@ jobs:
         with:
           python-version: '3.13'
           cache: pip
-          cache-dependency-path: requirements.lock
-      - run: pip install -r requirements.lock && pip install --no-deps -e .
+          cache-dependency-path: |
+            requirements.lock
+            requirements-build.lock
+      - run: pip install -r requirements.lock -r requirements-build.lock && pip install --no-deps --no-build-isolation -e .
       - name: Migrate real PostgreSQL
         run: python -m scripts.migrate
         env:
