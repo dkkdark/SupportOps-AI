@@ -15,6 +15,9 @@ from supportops.db import (
     AuditEvent,
     Membership,
     User,
+    ReplyPolicy,
+    PreparationJob,
+    OutboundReply,
 )
 
 
@@ -111,7 +114,7 @@ def launch_router(auth, sessions, config):
                 403, "Only the workspace owner can export the business data."
             )
         with sessions() as db:
-            data = {"business": actor.organization, "schema_version": "007"}
+            data = {"business": actor.organization, "schema_version": "008"}
             for cls, label in [
                 (KnowledgeSource, "knowledge"),
                 (RequestType, "request_types"),
@@ -119,6 +122,9 @@ def launch_router(auth, sessions, config):
                 (Ticket, "requests"),
                 (Review, "reviews"),
                 (AuditEvent, "activity"),
+                (ReplyPolicy, "reply_settings"),
+                (PreparationJob, "reply_preparation"),
+                (OutboundReply, "reply_deliveries"),
             ]:
                 rows = db.scalars(
                     select(cls).where(cls.organization_id == actor.organization_id)

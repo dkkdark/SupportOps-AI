@@ -37,8 +37,49 @@ def test_legacy_rows_are_archived_and_migration_is_repeatable(tmp_path):
         assert not conn.execute(text("PRAGMA foreign_key_check")).all()
         assert (
             conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-            == "007"
+            == "008"
         )
+    engine.dispose()
+
+
+def test_reply_migration_preserves_existing_readonly_gmail_without_enabling_sending(
+    tmp_path,
+):
+    engine, _ = make_database(f"sqlite:///{tmp_path}/gmail-upgrade.db")
+    config = Config("alembic.ini")
+    with engine.begin() as conn:
+        config.attributes["connection"] = conn
+        command.upgrade(config, "007")
+        conn.execute(
+            text(
+                "INSERT INTO users (id,email,name,password_hash,email_verified,created_at) VALUES ('owner','alex@example.test','Alex Morgan','synthetic',1,CURRENT_TIMESTAMP)"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO organizations (id,name,slug,industry,workflow_mode,is_demo,created_at) VALUES ('business','Business','business','General','knowledge',0,CURRENT_TIMESTAMP)"
+            )
+        )
+        conn.execute(
+            text("""INSERT INTO gmail_connections
+            (organization_id,id,mailbox,label_id,label_name,connected_by,refresh_token_encrypted,status,generation,
+             import_since,scan_before,phase,history_id,batch_final,pending_ids,next_sync_at,
+             imported_count,skipped_count,failures,created_at,updated_at)
+            VALUES ('business','connection','support@example.test','INBOX','INBOX','owner','opaque-ciphertext','active',1,
+             CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'history','100',0,'[]',CURRENT_TIMESTAMP,
+             4,0,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)""")
+        )
+    migrate(engine)
+    migrate(engine)
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT send_enabled,refresh_token_encrypted,imported_count FROM gmail_connections"
+            )
+        ).one()
+        assert tuple(row) == (0, "opaque-ciphertext", 4)
+        assert conn.execute(text("SELECT count(*) FROM reply_policies")).scalar() == 0
+        assert not conn.execute(text("PRAGMA foreign_key_check")).all()
     engine.dispose()
 
 

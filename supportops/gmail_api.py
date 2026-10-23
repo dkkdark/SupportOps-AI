@@ -13,6 +13,7 @@ import httpx
 from cryptography.fernet import Fernet, InvalidToken
 
 SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
+SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send"
 CALLBACK = "/api/integrations/gmail/callback"
 API = "https://gmail.googleapis.com/gmail/v1/users/me"
 TOKEN = "https://oauth2.googleapis.com/token"
@@ -62,7 +63,7 @@ def unseal(config, value, context):
         raise GmailError("gmail_credentials_unavailable") from None
 
 
-def authorization_url(config, state, verifier):
+def authorization_url(config, state, verifier, enable_sending=False):
     challenge = (
         base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest())
         .rstrip(b"=")
@@ -73,7 +74,7 @@ def authorization_url(config, state, verifier):
             "client_id": config.google_oauth_client_id,
             "redirect_uri": config.public_base_url.rstrip("/") + CALLBACK,
             "response_type": "code",
-            "scope": SCOPE,
+            "scope": " ".join([SCOPE, SEND_SCOPE] if enable_sending else [SCOPE]),
             "state": state,
             "access_type": "offline",
             "prompt": "consent select_account",
@@ -212,6 +213,51 @@ class Google:
             )
             result["_body_unavailable"] = True
             return result
+
+    def send(self, access, raw, thread_id=None):
+        payload = {"raw": raw}
+        if thread_id:
+            payload["threadId"] = valid_id(thread_id)
+        try:
+            with self.client.stream(
+                "POST",
+                API + "/messages/send",
+                headers={"Authorization": "Bearer " + access},
+                json=payload,
+            ) as response:
+                if response.status_code >= 500 or response.status_code == 408:
+                    raise SendFailure("delivery_unconfirmed", True)
+                if response.status_code == 429:
+                    raise SendFailure("gmail_rate_limited", False)
+                if response.status_code in {401, 403}:
+                    raise SendFailure("gmail_send_access_denied", False)
+                if not response.is_success:
+                    raise SendFailure("gmail_send_rejected", False)
+                body = bytearray()
+                for chunk in response.iter_bytes():
+                    body.extend(chunk)
+                    if len(body) > 65536:
+                        raise SendFailure("delivery_unconfirmed", True)
+                result = json.loads(body)
+                return valid_id(result.get("id"))
+        except (httpx.HTTPError, ValueError, TypeError, AttributeError, GmailError):
+            raise SendFailure("delivery_unconfirmed", True) from None
+
+    def find_sent(self, access, rfc_id):
+        result = self.request(
+            "GET",
+            API + "/messages",
+            access,
+            params={"q": "in:sent rfc822msgid:" + rfc_id.strip("<>"), "maxResults": 2},
+        )
+        messages = result.get("messages", [])
+        return valid_id(messages[0].get("id")) if len(messages) == 1 else None
+
+
+class SendFailure(Exception):
+    def __init__(self, code, ambiguous):
+        self.code, self.ambiguous = code, ambiguous
+        super().__init__(code)
 
 
 def access_token(result, require_scope=False):

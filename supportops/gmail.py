@@ -17,6 +17,7 @@ from supportops.gmail_api import (
     API,
     CALLBACK,
     GmailError,
+    SEND_SCOPE,
     Google,
     access_token,
     authorization_url,
@@ -37,6 +38,7 @@ class OAuthInput(BaseModel):
     lookback_days: Literal[0, 7, 30] = 0
     request_type_id: str | None = Field(default=None, max_length=40)
     authorized: Literal[True]
+    enable_sending: bool = False
 
 
 def public_connection(row):
@@ -50,6 +52,7 @@ def public_connection(row):
             "label_name",
             "request_type_id",
             "status",
+            "send_enabled",
             "phase",
             "last_synced_at",
             "last_error",
@@ -151,7 +154,7 @@ def gmail_router(auth, sessions, config):
                 )
             )
             db.commit()
-        return {"url": authorization_url(config, state, verifier)}
+        return {"url": authorization_url(config, state, verifier, body.enable_sending)}
 
     @router.get("/callback")
     def callback(
@@ -215,6 +218,11 @@ def gmail_router(auth, sessions, config):
         try:
             tokens = google.exchange(code, verifier)
             access = access_token(tokens, require_scope=True)
+            if (
+                options.get("enable_sending")
+                and SEND_SCOPE not in tokens.get("scope", "").split()
+            ):
+                raise GmailError("gmail_access_denied")
             refresh = tokens.get("refresh_token")
             if not isinstance(refresh, str) or not 1 <= len(refresh) <= 8192:
                 raise GmailError("gmail_reconnect_required")
@@ -267,6 +275,7 @@ def gmail_router(auth, sessions, config):
                 row.generation = options["generation"] + 1
                 row.refresh_token_encrypted = seal(config, refresh, token_context(row))
                 row.status, row.phase, row.history_id = "active", "initial", cursor
+                row.send_enabled = bool(options.get("enable_sending"))
                 row.import_since = now - timedelta(days=options["lookback_days"])
                 row.scan_before, row.next_sync_at = now, now
                 row.pending_ids, row.batch_final = [], False
@@ -475,6 +484,9 @@ def accept_message(config, sessions, snapshot, message_id, message):
             )
             db.add(item)
             db.flush()
+            from supportops.delivery import remember_origin
+
+            remember_origin(db, row, item, message_id, message)
             create_context(
                 db,
                 row.organization_id,

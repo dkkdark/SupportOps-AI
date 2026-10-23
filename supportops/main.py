@@ -1,81 +1,52 @@
 import hashlib
 import json
 import logging
-import time
 import uuid
-from contextlib import ExitStack, asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from langgraph.types import Command
-from opentelemetry import trace
-from sqlalchemy import select, text, update
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
-from supportops.billing import billing_router, consume, reserve, settle
+from supportops.billing import billing_router, consume
 from supportops.intake import (
     intake_router,
     validate_routing,
     create_context,
-    context_dict,
 )
 from supportops.launch import launch_router
 from supportops.gmail import gmail_router
+from supportops.preparation import reply_router
 from supportops.gmail_api import ready as gmail_ready
 from supportops.accounts import accounts_router
 from supportops.operations import operations_router
-from supportops.agent import build_agent_graph
-from supportops.auth import Auth, Identity, audit, aware
+from supportops.auth import Auth, Identity, audit
 from supportops.config import Settings, settings
 from supportops.content import content_router
 from supportops.db import (
-    CreditReservation,
     Document,
     KnowledgeSource,
     ReplyTemplate,
     Review,
     Ticket,
     make_database,
-    utcnow,
 )
 from supportops.migration import migrate, verify_schema
 from supportops.retrieval import embed
 from supportops.schemas import AnalyzeInput, ReviewInput, Rule, TicketInput
 from supportops.telemetry import configure
-from supportops.workflow import build_graph
+from supportops.runtime import graph_runtime
+from supportops.tickets import ticket_dict, analyze_ticket, review_ticket
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB = Path(__file__).parent / "web"
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
 )
-
-
-def ticket_dict(ticket):
-    fields = (
-        "id",
-        "customer",
-        "email",
-        "subject",
-        "message",
-        "order_id",
-        "channel",
-        "priority",
-        "status",
-        "category",
-        "result",
-        "revision",
-        "template_id",
-    )
-    return {
-        **{key: getattr(ticket, key) for key in fields},
-        **context_dict(ticket),
-        "created_at": aware(ticket.created_at).isoformat(),
-        "updated_at": aware(ticket.updated_at).isoformat(),
-    }
 
 
 def seed_demo(db, organization_id):
@@ -158,31 +129,11 @@ def create_app(
             migrate(engine)
         verify_schema(engine)
         configure(config)
-        with ExitStack() as stack:
-            if config.database_url.startswith("postgresql"):
-                from langgraph.checkpoint.postgres import PostgresSaver
-
-                cp = stack.enter_context(
-                    PostgresSaver.from_conn_string(
-                        config.database_url.replace(
-                            "postgresql+psycopg://", "postgresql://"
-                        )
-                    )
-                )
-            else:
-                from langgraph.checkpoint.sqlite import SqliteSaver
-
-                cp = stack.enter_context(
-                    SqliteSaver.from_conn_string(
-                        str(engine.url.database) + ".checkpoints"
-                    )
-                )
-            app.state.graph = build_graph(
-                config, sessions, cp, orders_transport, llm_transport
-            )
-            app.state.agent_graph = build_agent_graph(
-                config, sessions, cp, llm_transport, vector_transport
-            )
+        with graph_runtime(
+            config, sessions, orders_transport, llm_transport, vector_transport
+        ) as graphs:
+            app.state.graph = graphs.graph
+            app.state.agent_graph = graphs.agent_graph
             app.state.sessions = sessions
             app.state.auth = auth
             yield
@@ -271,6 +222,7 @@ def create_app(
     app.include_router(intake_router(auth, sessions, config, WEB))
     app.include_router(launch_router(auth, sessions, config))
     app.include_router(gmail_router(auth, sessions, config))
+    app.include_router(reply_router(auth, sessions, config))
 
     def find(db, actor, id):
         item = db.get(Ticket, (actor.organization_id, id))
@@ -487,190 +439,11 @@ def create_app(
 
     @app.post("/api/tickets/{id}/analyze")
     def analyze(id: str, body: AnalyzeInput, actor: Identity = Depends(auth.current)):
-        if not actor.organization["is_demo"]:
-            auth.ensure_verified(actor)
-        if body.fault != "none" and (
-            not config.fault_injection_enabled or not actor.organization["is_demo"]
-        ):
-            raise HTTPException(
-                403, "Fault scenarios are available only in enabled demo workspaces."
-            )
-        with sessions() as db:
-            t = find(db, actor, id)
-            if t.status in ("approved", "escalated", "review"):
-                return ticket_dict(t)
-            if t.status == "processing" and t.updated_at.replace(
-                tzinfo=timezone.utc
-            ) > utcnow() - timedelta(
-                seconds=max(90, config.agent_timeout_seconds + 30)
-            ):
-                raise HTTPException(409, "analysis_in_progress")
-            reservation_id = (
-                reserve(db, config, actor.organization_id, user_id=actor.user_id)
-                if actor.organization["workflow_mode"] == "knowledge"
-                and config.model_provider == "openai"
-                else None
-            )
-            if not db.execute(
-                update(Ticket)
-                .where(
-                    Ticket.organization_id == actor.organization_id,
-                    Ticket.id == id,
-                    Ticket.revision == t.revision,
-                )
-                .values(
-                    status="processing", revision=t.revision + 1, updated_at=utcnow()
-                )
-            ).rowcount:
-                raise HTTPException(409, "revision_conflict")
-            db.commit()
-            db.refresh(t)
-            thread = f"{actor.organization_id}:{id}:{t.revision}"
-            from supportops.billing import reservation_budget
-
-            initial = {
-                "credit_budget_usd": reservation_budget(
-                    db.get(CreditReservation, reservation_id)
-                )
-                if reservation_id
-                else config.agent_provider_cost_limit,
-                "organization_id": actor.organization_id,
-                "business_name": actor.organization["name"],
-                "workflow_mode": actor.organization["workflow_mode"],
-                "agent_name": actor.name,
-                "subject": t.subject,
-                "template_id": t.template_id,
-                "ticket_id": id,
-                "customer": t.customer,
-                "message": t.message,
-                "order_id": t.order_id,
-                "fault": body.fault,
-                "trace_id": uuid.uuid4().hex,
-                "steps": [],
-                "reason": None,
-                "draft": None,
-                "sources": [],
-                "order": None,
-                "usage": {},
-            }
-            started = time.perf_counter()
-            try:
-                with trace.get_tracer("supportops").start_as_current_span(
-                    "ticket.analyze"
-                ) as span:
-                    span.set_attribute("ticket.id", id)
-                    span.set_attribute("organization.id", actor.organization_id)
-                    initial["trace_id"] = format(
-                        span.get_span_context().trace_id, "032x"
-                    )
-                    graph = (
-                        app.state.agent_graph
-                        if actor.organization["workflow_mode"] == "knowledge"
-                        and config.model_provider == "openai"
-                        else app.state.graph
-                    )
-                    result = graph.invoke(
-                        initial, config={"configurable": {"thread_id": thread}}
-                    )
-                for key in ("__interrupt__", "message", "customer"):
-                    result.pop(key, None)
-                result["duration_ms"] = round((time.perf_counter() - started) * 1000, 2)
-                result["thread_id"] = thread
-                t.result = result
-                t.order_id = result.get("order_id", t.order_id)
-                t.category = result.get("categories", ["other"])[0]
-                t.status = "manual" if result.get("reason") else "review"
-            except Exception as exc:
-                logging.error(
-                    "workflow_failed organization_id=%s ticket_id=%s error_type=%s",
-                    actor.organization_id,
-                    id,
-                    type(exc).__name__,
-                )
-                t.result = {
-                    "reason": "workflow_failed",
-                    "trace_id": initial["trace_id"],
-                    "steps": [],
-                    "sources": [],
-                    "draft": None,
-                }
-                t.status = "manual"
-            t.updated_at = utcnow()
-            audit(
-                db,
-                actor,
-                "ticket.analyzed",
-                {"ticket_id": id, "status": t.status, "reason": t.result.get("reason")},
-            )
-            db.commit()
-            settle(
-                sessions,
-                reservation_id,
-                (t.result or {}).get("usage", {}),
-                uncertain=bool(
-                    (t.result or {}).get("usage", {}).get("uncertain")
-                    or (t.result or {}).get("reason") == "workflow_failed"
-                ),
-            )
-            return ticket_dict(t)
+        return analyze_ticket(config, sessions, app.state, auth, id, body, actor)
 
     @app.post("/api/tickets/{id}/review")
     def review(id: str, body: ReviewInput, actor: Identity = Depends(auth.current)):
-        with sessions() as db:
-            t = find(db, actor, id)
-            if t.revision != body.revision or t.status not in ("review", "manual"):
-                raise HTTPException(409, "revision_conflict")
-            if body.decision == "approve" and (
-                t.status != "review" or len(body.text.strip()) < 10
-            ):
-                raise HTTPException(422, "draft_not_approvable")
-            status = "approved" if body.decision == "approve" else "escalated"
-            if not db.execute(
-                update(Ticket)
-                .where(
-                    Ticket.organization_id == actor.organization_id,
-                    Ticket.id == id,
-                    Ticket.revision == body.revision,
-                    Ticket.status.in_(["review", "manual"]),
-                )
-                .values(status=status, revision=body.revision + 1, updated_at=utcnow())
-            ).rowcount:
-                raise HTTPException(409, "revision_conflict")
-            thread = (t.result or {}).get("thread_id")
-            if thread:
-                if (
-                    not thread.startswith(actor.organization_id + ":")
-                    and actor.organization_id != "legacy-demo"
-                ):
-                    raise HTTPException(409, "Workflow workspace mismatch.")
-                graph_config = {"configurable": {"thread_id": thread}}
-                graph = (
-                    app.state.agent_graph
-                    if (t.result or {}).get("manifest", {}).get("engine")
-                    == "openai-agent-v1"
-                    else app.state.graph
-                )
-                snapshot = graph.get_state(graph_config)
-                if snapshot.next:
-                    graph.invoke(Command(resume=body.model_dump()), config=graph_config)
-                elif snapshot.values.get("review") != body.model_dump():
-                    raise HTTPException(409, "checkpoint_review_conflict")
-            db.add(
-                Review(
-                    id=uuid.uuid4().hex,
-                    organization_id=actor.organization_id,
-                    ticket_id=id,
-                    decision=body.decision,
-                    text=body.text,
-                    note=body.note,
-                    actor=actor.name[:80],
-                    actor_id=actor.user_id,
-                )
-            )
-            audit(db, actor, "ticket." + status, {"ticket_id": id})
-            db.commit()
-            db.refresh(t)
-            return ticket_dict(t)
+        return review_ticket(config, sessions, app.state, id, body, actor)
 
     @app.get("/api/metrics")
     def metrics_view(actor: Identity = Depends(auth.current)):
@@ -684,7 +457,7 @@ def create_app(
                 "total": len(items),
                 "new": sum(t.status == "new" for t in items),
                 "review": sum(t.status == "review" for t in items),
-                "approved": sum(t.status == "approved" for t in items),
+                "approved": sum(t.status in {"approved", "sent"} for t in items),
                 "manual": sum(t.status in ("manual", "escalated") for t in items),
                 "analyzed": len(results),
                 "p50_ms": durations[len(durations) // 2] if durations else None,

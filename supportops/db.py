@@ -194,6 +194,15 @@ class Ticket(Base):
     context: Mapped["RequestContext | None"] = relationship(
         uselist=False, lazy="selectin"
     )
+    delivery: Mapped["OutboundReply | None"] = relationship(
+        uselist=False, lazy="selectin"
+    )
+    preparation: Mapped["PreparationJob | None"] = relationship(
+        uselist=False, lazy="selectin"
+    )
+    email_origin: Mapped["EmailOrigin | None"] = relationship(
+        uselist=False, lazy="selectin"
+    )
     created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
     customer: Mapped[str] = mapped_column(String(100))
     email: Mapped[str] = mapped_column(String(160), default="")
@@ -586,6 +595,7 @@ class GmailConnection(Base):
     connected_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     refresh_token_encrypted: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(30), default="active")
+    send_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     generation: Mapped[int] = mapped_column(Integer, default=1)
     import_since: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     scan_before: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -605,6 +615,99 @@ class GmailConnection(Base):
     imported_count: Mapped[int] = mapped_column(Integer, default=0)
     skipped_count: Mapped[int] = mapped_column(Integer, default=0)
     failures: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
+
+class ReplyPolicy(Base):
+    __tablename__ = "reply_policies"
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), primary_key=True
+    )
+    mode: Mapped[str] = mapped_column(String(20), default="human")
+    updated_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
+
+class PreparationJob(Base):
+    __tablename__ = "preparation_jobs"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "ticket_id"], ["tickets.organization_id", "tickets.id"]
+        ),
+        UniqueConstraint("organization_id", "ticket_id", name="uq_preparation_ticket"),
+    )
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), index=True
+    )
+    ticket_id: Mapped[str] = mapped_column(String(40))
+    actor_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    mode: Mapped[str] = mapped_column(String(20), default="human")
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    lease_token: Mapped[str | None] = mapped_column(String(40))
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reservation_id: Mapped[str | None] = mapped_column(
+        ForeignKey("credit_reservations.id")
+    )
+    last_error: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
+
+class EmailOrigin(Base):
+    __tablename__ = "email_origins"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "ticket_id"], ["tickets.organization_id", "tickets.id"]
+        ),
+    )
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), primary_key=True
+    )
+    ticket_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    mailbox: Mapped[str] = mapped_column(String(160))
+    message_id: Mapped[str] = mapped_column(String(120))
+    thread_id: Mapped[str | None] = mapped_column(String(120))
+    rfc_message_id: Mapped[str | None] = mapped_column(String(520))
+    reply_to: Mapped[str] = mapped_column(String(160), default="")
+    auto_reply_blocked: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class OutboundReply(Base):
+    __tablename__ = "outbound_replies"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "ticket_id"], ["tickets.organization_id", "tickets.id"]
+        ),
+        UniqueConstraint("organization_id", "ticket_id", name="uq_outbound_ticket"),
+    )
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), index=True
+    )
+    ticket_id: Mapped[str] = mapped_column(String(40))
+    actor_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    mode: Mapped[str] = mapped_column(String(20))
+    ticket_revision: Mapped[int] = mapped_column(Integer)
+    mailbox: Mapped[str] = mapped_column(String(160))
+    recipient: Mapped[str] = mapped_column(String(160))
+    text: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    lease_token: Mapped[str | None] = mapped_column(String(40))
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    gmail_id: Mapped[str | None] = mapped_column(String(120))
+    last_error: Mapped[str | None] = mapped_column(String(80))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow
     )

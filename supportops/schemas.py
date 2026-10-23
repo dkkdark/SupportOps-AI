@@ -47,6 +47,8 @@ class ReviewInput(BaseModel):
     text: str = Field(default="", max_length=10000)
     note: str = Field(default="", max_length=1000)
     revision: int = Field(ge=0)
+    send: bool = False
+    manual: bool = False
 
 
 class ModelSelection(BaseModel):

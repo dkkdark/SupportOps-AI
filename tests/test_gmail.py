@@ -1,7 +1,6 @@
 """Offline Gmail contracts: OAuth binding, encrypted grants and durable imports."""
 
 import base64
-import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
@@ -10,11 +9,10 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 import pytest
 from cryptography.fernet import Fernet
-from sqlalchemy import select
 from supportops.auth import digest
-from supportops.db import GmailConnection, GmailOAuthState, Ticket, utcnow
+from supportops.db import GmailConnection, GmailOAuthState, utcnow
 from supportops.gmail import OAuthLogFilter, sync_one, poll_pending, token_context
-from supportops.gmail_api import API, SCOPE, seal, unseal
+from supportops.gmail_api import SCOPE, SEND_SCOPE, seal, unseal
 from tests.test_workspaces import register, invitation, accept, account
 
 
@@ -140,7 +138,10 @@ def start(owner, **options):
     )
     assert response.status_code == 200, response.text
     query = parse_qs(urlparse(response.json()["url"]).query)
-    assert query["scope"] == [SCOPE] and query["code_challenge_method"] == ["S256"]
+    assert query["scope"] == [
+        " ".join([SCOPE, SEND_SCOPE] if options.get("enable_sending") else [SCOPE])
+    ]
+    assert query["code_challenge_method"] == ["S256"]
     return query["state"][0]
 
 
@@ -227,6 +228,26 @@ def test_oauth_state_is_session_bound_single_use_and_tokens_are_encrypted(gmail)
             "verifier",
             "encrypted",
         ]
+    )
+
+
+def test_send_permission_requires_an_explicit_request_and_google_grant(gmail):
+    owner, _, _, _ = gmail
+    connect(owner)
+    assert (
+        owner.get("/api/integrations/gmail").json()["connection"]["send_enabled"]
+        is False
+    )
+    state = start(owner, enable_sending=True)
+    response = owner.get(
+        "/api/integrations/gmail/callback",
+        params={"state": state, "code": "synthetic-code"},
+        follow_redirects=False,
+    )
+    assert "gmail=failed" in response.headers["location"]
+    assert (
+        owner.get("/api/integrations/gmail").json()["connection"]["send_enabled"]
+        is False
     )
 
 

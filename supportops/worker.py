@@ -94,7 +94,7 @@ def index_pending(config, sessions, on_progress=lambda: None, limit=10):
     return len(jobs)
 
 
-def cycle(config, sessions, worker_id, housekeeping=False):
+def cycle(config, sessions, worker_id, housekeeping=False, graphs=None):
     details = {"status": "running"}
     progress = lambda: heartbeat(sessions, worker_id, details)
     progress()
@@ -105,6 +105,11 @@ def cycle(config, sessions, worker_id, housekeeping=False):
     details["gmail_sources_checked"] = poll_pending(
         config, sessions, on_progress=progress
     )
+    from supportops.delivery import delivery_pending
+    from supportops.preparation import preparation_pending
+    if graphs is not None:
+        details["replies_prepared"] = preparation_pending(config, sessions, graphs, on_progress=progress)
+    details["replies_delivered"] = delivery_pending(config, sessions, on_progress=progress)
     if housekeeping:
         details["maintenance"] = maintenance(sessions)
     progress()
