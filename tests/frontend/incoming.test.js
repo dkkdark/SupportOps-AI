@@ -36,7 +36,14 @@ test('incoming requests appear without navigation, preserve selection and scroll
   assert.ok(calls.every((r) => r.method === 'GET'));
   assert.ok(
     calls.every((r) =>
-      ['/tickets', '/metrics', '/integrations/gmail', '/tickets/A1'].includes(r.path),
+      [
+        '/tickets',
+        '/metrics',
+        '/integrations/gmail',
+        '/tickets/A1',
+        '/reply-settings',
+        '/billing',
+      ].includes(r.path),
     ),
   );
 });

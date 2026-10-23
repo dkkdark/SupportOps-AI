@@ -38,6 +38,7 @@ test('Gmail settings show actual status and submit explicit consent through the 
     lookback_days: 7,
     request_type_id: null,
     authorized: true,
+    enable_sending: false,
   });
 });
 

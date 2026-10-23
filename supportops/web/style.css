@@ -3200,3 +3200,43 @@ h1 {
   margin-top: 4px;
   flex-shrink: 0;
 }
+
+.reply-policy-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  margin: 18px 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: white;
+}
+.reply-policy-strip strong,
+.reply-policy-strip span {
+  display: block;
+}
+.reply-policy-strip span {
+  color: #68756b;
+  font-size: 13px;
+  margin-top: 5px;
+  line-height: 1.5;
+}
+.heading-actions {
+  flex-wrap: wrap;
+}
+.badge-queued,
+.badge-sending {
+  background: #eef1fb;
+  color: #62749e;
+}
+.badge-sent {
+  background: #e8f3df;
+  color: #527936;
+}
+@media (max-width: 700px) {
+  .reply-policy-strip {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

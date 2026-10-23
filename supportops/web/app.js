@@ -19,6 +19,9 @@ const esc = (value) =>
   );
 const statusNames = {
   new: 'New',
+  queued: 'Queued',
+  sending: 'Sending',
+  sent: 'Sent',
   processing: 'Processing',
   review: 'In review',
   manual: 'Needs an agent',
@@ -99,6 +102,7 @@ const state = {
   types: [],
   intakes: [],
   gmail: {},
+  replySettings: {},
   people: [],
   billing: {},
   plans: [],
@@ -196,6 +200,7 @@ async function reload({ incomingOnly = false, canApply = () => true } = {}) {
     billing,
     plans,
     gmail,
+    replySettings,
   ] = await Promise.all([
     request('/tickets'),
     incomingOnly ? state.docs : request('/knowledge'),
@@ -208,9 +213,10 @@ async function reload({ incomingOnly = false, canApply = () => true } = {}) {
     incomingOnly ? state.types : isDemo ? [] : request('/request-types'),
     incomingOnly ? state.intakes : canManage() ? request('/intakes') : [],
     incomingOnly ? state.people : isDemo ? [] : request('/directory'),
-    incomingOnly ? state.billing : isDemo ? {} : request('/billing'),
+    isDemo ? {} : request('/billing'),
     incomingOnly ? state.plans : isDemo ? [] : request('/plans'),
     !isDemo && canManage() ? request('/integrations/gmail') : {},
+    !isDemo ? request('/reply-settings') : {},
   ]).catch((error) => {
     if (workspace !== workspaceToken() || version !== reloadVersion) return [];
     throw error;
@@ -227,6 +233,7 @@ async function reload({ incomingOnly = false, canApply = () => true } = {}) {
     billing,
     plans,
     gmail,
+    replySettings,
     templates,
     members: members.map((m) => ({ ...m, id: m.user_id })),
     invitations,
@@ -276,7 +283,14 @@ async function refreshIncoming() {
   incomingRefresh = true;
   const workspace = workspaceToken();
   const page = state.page;
-  const before = JSON.stringify([state.tickets, state.metrics, state.gmail, state.detail]);
+  const before = JSON.stringify([
+    state.tickets,
+    state.metrics,
+    state.gmail,
+    state.detail,
+    state.replySettings,
+    state.billing,
+  ]);
   try {
     const refreshed = await reload({
       incomingOnly: true,
@@ -284,7 +298,15 @@ async function refreshIncoming() {
     });
     if (workspace !== workspaceToken()) return;
     incomingDirty ||=
-      before !== JSON.stringify([state.tickets, state.metrics, state.gmail, state.detail]);
+      before !==
+      JSON.stringify([
+        state.tickets,
+        state.metrics,
+        state.gmail,
+        state.detail,
+        state.replySettings,
+        state.billing,
+      ]);
     if (refreshed && incomingDirty && state.page === page && canRefreshIncoming()) {
       render();
       incomingDirty = false;
@@ -294,7 +316,15 @@ async function refreshIncoming() {
     // the same sign-in flow as an explicit request.
     if (workspace === workspaceToken()) {
       incomingDirty ||=
-        before !== JSON.stringify([state.tickets, state.metrics, state.gmail, state.detail]);
+        before !==
+        JSON.stringify([
+          state.tickets,
+          state.metrics,
+          state.gmail,
+          state.detail,
+          state.replySettings,
+          state.billing,
+        ]);
       if (error.status === 401) fail(error);
     }
   } finally {
@@ -324,10 +354,10 @@ function sidebar() {
     .map(([p, i]) => nav(p, i))
     .join(
       '',
-    )}</nav><div class="sidebar-bottom">${nav('settings', 'settings')}<a class="nav-item" href="#home" aria-label="Product overview">${icon('globe')}<span>Product overview</span></a><div class="system-note"><b>${icon('shield')}Human in the loop</b>Every reply gets a human review before it reaches a customer.<a href="#quality">How review works ${icon('arrow')}</a></div><div class="profile"><div class="avatar">${esc(initials(account.user.name))}</div><div><strong>${esc(account.user.name)}</strong><small>${esc(account.organization?.role || 'Account')}</small></div>${!isDemo ? `<button class="icon-btn" data-action="logout" aria-label="Sign out" title="Sign out">${icon('external')}</button>` : ''}</div></div></aside>`;
+    )}</nav><div class="sidebar-bottom">${nav('settings', 'settings')}<a class="nav-item" href="#home" aria-label="Product overview">${icon('globe')}<span>Product overview</span></a><div class="system-note"><b>${icon('shield')}Your delivery workflow</b>Choose human review or automatic delivery for verified replies. Requests needing a person stay with your team.<a href="#quality">How review works ${icon('arrow')}</a></div><div class="profile"><div class="avatar">${esc(initials(account.user.name))}</div><div><strong>${esc(account.user.name)}</strong><small>${esc(account.organization?.role || 'Account')}</small></div>${!isDemo ? `<button class="icon-btn" data-action="logout" aria-label="Sign out" title="Sign out">${icon('external')}</button>` : ''}</div></div></aside>`;
 }
 function nav(p, i) {
-  return `<a href="#${p}" class="nav-item ${state.page === p ? 'active' : ''}" aria-label="${pages[p]}" ${state.page === p ? 'aria-current="page"' : ''}>${icon(i)}<span>${pages[p]}</span>${p === 'tickets' ? `<b class="nav-count">${state.tickets.filter((t) => !['approved', 'escalated'].includes(t.status)).length}</b>` : ''}</a>`;
+  return `<a href="#${p}" class="nav-item ${state.page === p ? 'active' : ''}" aria-label="${pages[p]}" ${state.page === p ? 'aria-current="page"' : ''}>${icon(i)}<span>${pages[p]}</span>${p === 'tickets' ? `<b class="nav-count">${state.tickets.filter((t) => !['approved', 'escalated', 'sent'].includes(t.status)).length}</b>` : ''}</a>`;
 }
 let signupWidget = null;
 function mountSignupCaptcha() {
@@ -431,7 +461,7 @@ function pageContent() {
   }
 }
 function ticketsPage() {
-  return `${onboarding()}${heading('Requests', 'A little less busywork. A lot more thoughtful support.', `<span class="date-label">${icon('clock')}${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span><button class="btn btn-primary" data-action="new">${icon('plus')}New request</button>`)}${metricsRow()}<div class="queue-toolbar"><div class="filter-tabs" role="group" aria-label="Filter tickets">${[
+  return `${onboarding()}${heading('Requests', 'A little less busywork. A lot more thoughtful support.', `${!isDemo ? `<button class="btn" data-action="refresh-inbox">${icon('refresh')}Refresh inbox</button><button class="btn btn-primary" data-action="prepare-all" ${state.tickets.some((t) => t.status === 'new') ? '' : 'disabled'}>${icon('spark')}Prepare all replies</button>` : ''}<button class="btn" data-action="new">${icon('plus')}New request</button>`)}${metricsRow()}${!isDemo ? `<div class="reply-policy-strip"><div><strong>${state.replySettings.mode === 'automatic' ? 'Automatic delivery' : 'Human review'}</strong><span>${state.replySettings.mode === 'automatic' ? 'Verified replies are sent by email. Requests needing a person go to Needs an agent.' : 'Review prepared replies before choosing to send them.'}${state.replySettings.queued ? ` · ${Number(state.replySettings.queued)} queued or processing` : ''}</span></div>${canManage() ? '<button class="btn" data-action="reply-settings">Delivery settings</button>' : ''}</div>` : ''}<div class="queue-toolbar"><div class="filter-tabs" role="group" aria-label="Filter tickets">${[
     ['all', 'All requests'],
     ['review', 'In review'],
     ['manual', 'Needs an agent'],
@@ -445,6 +475,34 @@ function ticketsPage() {
       '',
     )}</div><div class="toolbar-right"><label class="search-wrap">${icon('search')}<input id="ticket-search" aria-label="Search requests" placeholder="Search requests…" value="${esc(state.query)}"><kbd>⌘ K</kbd></label><button class="btn" data-action="sort" title="Change sort order">${icon('filter')}<span>${state.sort === 'newest' ? 'Newest' : 'Priority'}</span></button></div></div><section class="workbench" aria-label="Ticket workspace"><div class="ticket-list" data-scroll-key="${esc(account.organization?.id)}:queue"><div class="list-heading"><b>Request queue</b>${icon('down')}</div><div id="ticket-items">${ticketItems()}</div></div><div class="ticket-detail" id="ticket-detail" data-scroll-key="${esc(account.organization?.id)}:${esc(state.selected)}:detail">${detailContent()}</div></section><div class="bottom-line"><span><i class="status-dot"></i>${esc(businessName())} · ${retailDemo() ? 'Synthetic sample data' : 'Your workspace'}</span><span><kbd>N</kbd> New request <kbd>⌘ K</kbd> Search</span></div>`;
 }
+function deliveryChoices() {
+  const settings = state.replySettings;
+  const canAuto = settings.sender_ready && (canManage() || settings.mode === 'automatic');
+  return `<label class="field">Reply delivery<select name="mode"><option value="human" ${settings.mode !== 'automatic' ? 'selected' : ''}>Review with a person before sending</option><option value="automatic" ${settings.mode === 'automatic' ? 'selected' : ''} ${canAuto ? '' : 'disabled'}>Send verified replies automatically</option></select></label><p class="form-hint">Only replies that pass the independent evidence and safety checks are eligible for automatic sending. Missing information, sensitive decisions and delivery problems go to Needs an agent.</p>${!settings.sender_ready ? '<p class="form-hint">To send email, an administrator must reconnect Gmail in Request sources and enable permission to send replies.</p>' : ''}`;
+}
+function preparationEditor(settingsOnly = false) {
+  const count = state.tickets.filter((t) => t.status === 'new').length;
+  modal(
+    settingsOnly
+      ? 'Reply delivery settings'
+      : `${count === 1 ? 'Prepare a reply' : 'Prepare replies'} for ${count} new request${count === 1 ? '' : 's'}`,
+    settingsOnly
+      ? 'Choose how this workspace handles verified replies.'
+      : 'All new requests in this workspace are included, even outside the current search or filter.',
+    `<form id="${settingsOnly ? 'reply-settings-form' : 'prepare-all-form'}">${deliveryChoices()}${!settingsOnly ? '<div class="notice-card">AI usage is charged to your existing allowance. Processing stops when that allowance is reached. Requests needing a person remain available to your team.</div>' : '<p class="form-hint">Switching to human review stops automatic replies that have not yet been sent.</p>'}<div class="form-error" role="alert"></div><div class="modal-actions"><button type="button" class="btn" data-action="close-modal">Cancel</button><button class="btn btn-primary" type="submit">${settingsOnly ? 'Save settings' : 'Prepare all replies'}</button></div></form>`,
+    true,
+  );
+}
+function agentReplyEditor() {
+  const ticket = state.detail;
+  if (!ticket) return;
+  modal(
+    'Reply as an agent',
+    `Write your response to ${ticket.customer}.`,
+    `<form id="agent-reply-form" data-ticket-id="${esc(ticket.id)}" data-revision="${ticket.revision}"><label class="field">Your reply<textarea name="text" required minlength="10" maxlength="10000" rows="8">${esc(state.drafts[ticket.id] || ticket.result?.draft || '')}</textarea></label>${state.replySettings.sender_ready && ticket.reply_email ? `<label class="gmail-consent"><input type="checkbox" name="send" checked> Send to ${esc(ticket.reply_email)} after approval</label>` : '<p class="form-hint">Email delivery is unavailable for this request. You can approve and copy your reply.</p>'}<div class="form-error" role="alert"></div><div class="modal-actions"><button type="button" class="btn" data-action="close-modal">Cancel</button><button class="btn btn-primary" type="submit">Approve reply</button></div></form>`,
+    true,
+  );
+}
 function filteredByStatus(id) {
   return state.tickets.filter(
     (t) =>
@@ -452,7 +510,7 @@ function filteredByStatus(id) {
       (id === 'manual'
         ? ['manual', 'escalated'].includes(t.status)
         : id === 'approved'
-          ? t.status === 'approved'
+          ? ['approved', 'sent'].includes(t.status)
           : t.status === id),
   );
 }
@@ -488,9 +546,16 @@ function detailContent() {
   const t = state.detail;
   if (!t) return `<div class="empty">Select a request from the queue</div>`;
   const r = t.result;
-  return `<div class="detail-top"><div class="ticket-id">${esc(t.id)}<span>•</span>${icon(channelIcon(t.channel))}${{ email: 'Email', chat: 'Chat', web: 'Web form', api: 'Inbound API', internal: 'Internal' }[t.channel] || esc(t.channel)}</div><div class="detail-top-right">${t.priority === 'high' ? '<span class="priority"><i class="priority-dot"></i>High priority</span>' : ''}<button class="icon-btn" data-action="copy-id" title="Copy ticket ID" aria-label="Copy ticket ID">${icon('copy')}</button></div></div><div class="detail-grid"><div class="conversation"><h2 class="ticket-title">${esc(t.subject)}</h2><div class="category-line">${(r?.categories?.length ? r.categories : [t.category]).map((c) => `<span class="category-tag">${categoryNames[c] || esc(c)}</span>`).join('')}${t.order_id ? `<span class="category-tag">Order #${esc(t.order_id)}</span>` : ''}</div><article class="message-card"><div class="message-head"><div class="avatar">${esc(initials(t.customer))}</div><div><strong>${esc(t.customer)}</strong><small>${esc(t.email || 'Requester')}</small></div><time class="message-time">${fmtDate(t.created_at)}</time></div><p>${esc(t.message).replace(/\n/g, '<br>')}</p></article><section class="ai-panel"><div class="ai-heading"><div class="ai-heading-title">${icon('spark')}SupportOps assistant</div><span class="badge">${retailDemo() ? 'Sample workflow' : r?.manifest?.engine === 'openai-agent-v1' ? 'OpenAI agent' : config.provider === 'baseline' ? 'Offline baseline' : 'OpenAI + verification'}</span></div>${state.busy === t.id ? `<div class="loading-line"></div><div class="empty">${icon('refresh', 'spinner')}Investigating the request and gathering evidence…</div>` : !r ? emptyDraft() : analysisContent(t, r)}</section>${reviewActions(t)}<p class="review-caption">${icon('shield')}Replies are never sent to customers automatically</p></div>${contextPanel(t, r)}</div>`;
+  return `<div class="detail-top"><div class="ticket-id">${esc(t.id)}<span>•</span>${icon(channelIcon(t.channel))}${{ email: 'Email', chat: 'Chat', web: 'Web form', api: 'Inbound API', internal: 'Internal' }[t.channel] || esc(t.channel)}</div><div class="detail-top-right">${t.priority === 'high' ? '<span class="priority"><i class="priority-dot"></i>High priority</span>' : ''}<button class="icon-btn" data-action="copy-id" title="Copy ticket ID" aria-label="Copy ticket ID">${icon('copy')}</button></div></div><div class="detail-grid"><div class="conversation"><h2 class="ticket-title">${esc(t.subject)}</h2><div class="category-line">${(r?.categories?.length ? r.categories : [t.category]).map((c) => `<span class="category-tag">${categoryNames[c] || esc(c)}</span>`).join('')}${t.order_id ? `<span class="category-tag">Order #${esc(t.order_id)}</span>` : ''}</div><article class="message-card"><div class="message-head"><div class="avatar">${esc(initials(t.customer))}</div><div><strong>${esc(t.customer)}</strong><small>${esc(t.email || 'Requester')}</small></div><time class="message-time">${fmtDate(t.created_at)}</time></div><p>${esc(t.message).replace(/\n/g, '<br>')}</p></article><section class="ai-panel"><div class="ai-heading"><div class="ai-heading-title">${icon('spark')}SupportOps assistant</div><span class="badge">${retailDemo() ? 'Sample workflow' : r?.manifest?.engine === 'openai-agent-v1' ? 'OpenAI agent' : config.provider === 'baseline' ? 'Offline baseline' : 'OpenAI + verification'}</span></div>${state.busy === t.id ? `<div class="loading-line"></div><div class="empty">${icon('refresh', 'spinner')}Investigating the request and gathering evidence…</div>` : !r ? emptyDraft() : analysisContent(t, r)}</section>${reviewActions(t)}<p class="review-caption">${icon('shield')}${t.status === 'sent' ? 'Sent via Gmail' : 'Delivery follows your workspace settings'}</p></div>${contextPanel(t, r)}</div>`;
 }
 function emptyDraft() {
+  const approved = [...(state.detail?.reviews || [])]
+    .reverse()
+    .find((review) => review.decision === 'approve');
+  if (approved && ['approved', 'sending', 'sent'].includes(state.detail?.status))
+    return `<div class="draft-body"><div class="verified-note">Reply written and approved by a person</div><p>${esc(approved.text).replace(/\n/g, '<br>')}</p></div>`;
+  if (['queued', 'processing'].includes(state.detail?.status))
+    return `<div class="empty" role="status">${icon('clock')}Reply preparation is queued or in progress. You can keep working with other requests.</div>`;
   return `<div class="empty"><div class="waiting-illustration">${icon('spark')}</div><strong>From a question to a grounded reply</strong>Find the relevant policies<br>and prepare a reply with clear sources.<br><button class="btn btn-primary" data-action="analyze" ${state.busy ? 'disabled title="Wait for the current analysis to finish"' : config.demo_release && state.billing?.limit_reached && !retailDemo() ? 'disabled title="Demo AI allowance reached"' : ''}>${icon('spark')}Prepare a reply</button></div>`;
 }
 function analysisContent(t, r) {
@@ -509,11 +574,16 @@ function analysisContent(t, r) {
     )}</div>${state.tab === 'draft' ? draftContent(t, r) : state.tab === 'sources' ? sourcesContent(r) : state.tab === 'workflow' ? workflowContent(r) : historyContent(t)}`;
 }
 function draftContent(t, r) {
+  const humanReply = [...(t.reviews || [])]
+    .reverse()
+    .find((review) => review.decision === 'approve');
+  if (r.reason && humanReply && ['approved', 'sending', 'sent'].includes(t.status))
+    return `<div class="draft-body"><div class="verified-note">Reply written and approved by a person</div><p>${esc(humanReply.text).replace(/\n/g, '<br>')}</p></div>`;
   if (r.reason)
-    return `<div class="manual-box">${icon('human')}<b>An agent needs to take a look</b><p>${esc(reasonNames[r.reason] || r.reason)}</p>${r.handoff_reason ? `<p>${esc(r.handoff_reason)}</p>` : ''}${r.verifier?.issues?.length ? `<p>${esc(r.verifier.issues.join(' '))}</p>` : ''}<p style="margin-top:10px;font-size:10px">No verified draft was created. Available context and sources are preserved in this ticket.</p>${!['approved', 'escalated'].includes(t.status) ? `<button class="btn" data-action="analyze" ${state.busy ? 'disabled title="Wait for the current analysis to finish"' : config.demo_release && state.billing?.limit_reached && !retailDemo() ? 'disabled title="Demo AI allowance reached"' : ''}>${icon('refresh')}Retry analysis</button>` : ''}</div>`;
+    return `<div class="manual-box">${icon('human')}<b>An agent needs to take a look</b><p>${esc(reasonNames[r.reason] || r.reason)}</p>${r.handoff_reason ? `<p>${esc(r.handoff_reason)}</p>` : ''}${r.verifier?.issues?.length ? `<p>${esc(r.verifier.issues.join(' '))}</p>` : ''}<p style="margin-top:10px;font-size:10px">No verified draft was created. Available context and sources are preserved in this ticket.</p>${!['approved', 'escalated', 'sent'].includes(t.status) ? `<button class="btn" data-action="analyze" ${state.busy ? 'disabled title="Wait for the current analysis to finish"' : config.demo_release && state.billing?.limit_reached && !retailDemo() ? 'disabled title="Demo AI allowance reached"' : ''}>${icon('refresh')}Retry analysis</button>` : ''}</div>`;
   const latest = (t.reviews || []).findLast?.((x) => x.decision === 'approve');
   const text = state.drafts[t.id] ?? latest?.text ?? r.draft;
-  return `<div class="draft-body"><div class="verified-note">${icon('checkcircle')}Facts and policies verified · ready for your review</div>${state.drafts[t.id] && state.drafts[t.id] !== r.draft ? '<div class="revision-note">This draft was edited by an agent. Review any changed facts before approving.</div>' : ''}<label class="sr-only" for="draft-text">Reply draft</label><textarea id="draft-text" class="draft-text" ${t.status === 'approved' || t.status === 'escalated' ? 'readonly' : ''}>${esc(text || '')}</textarea><div class="draft-footer"><span>${icon('clock')}${ms(r.duration_ms)}${isDemo ? ' · simulated' : ''}</span><span>${t.status === 'approved' ? 'Approved by an agent' : 'Edit before approving'}<button class="icon-btn" data-action="copy-draft" aria-label="Copy reply" title="Copy reply">${icon('copy')}</button></span></div></div><div class="sources-inline">Sources${(
+  return `<div class="draft-body"><div class="verified-note">${icon('checkcircle')}Facts and policies verified · ready for your review</div>${state.drafts[t.id] && state.drafts[t.id] !== r.draft ? '<div class="revision-note">This draft was edited by an agent. Review any changed facts before approving.</div>' : ''}<label class="sr-only" for="draft-text">Reply draft</label><textarea id="draft-text" class="draft-text" ${['approved', 'escalated', 'sending', 'sent'].includes(t.status) ? 'readonly' : ''}>${esc(text || '')}</textarea><div class="draft-footer"><span>${icon('clock')}${ms(r.duration_ms)}${isDemo ? ' · simulated' : ''}</span><span>${t.status === 'approved' ? 'Approved by an agent' : 'Edit before approving'}<button class="icon-btn" data-action="copy-draft" aria-label="Copy reply" title="Copy reply">${icon('copy')}</button></span></div></div><div class="sources-inline">Sources${(
     r.sources || []
   )
     .slice(0, 3)
@@ -535,12 +605,25 @@ function historyContent(t) {
   return `<div class="draft-body"><div class="history-event">Request created<small>${fmtDate(t.created_at, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}</small></div>${t.result ? `<div class="history-event">${t.result.reason ? 'Sent for manual review' : 'Draft prepared'}<small>Revision ${t.revision} · ${esc(t.result.manifest?.model || 'workflow')}</small></div>` : ''}${(t.reviews || []).map((r) => `<div class="history-event">${r.decision === 'approve' ? 'Reply approved' : 'Request escalated'}<small>${fmtDate(r.created_at, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })} · ${esc(r.actor || 'Agent')}</small>${r.note ? `<p>${esc(r.note)}</p>` : ''}</div>`).join('')}</div>`;
 }
 function reviewActions(t) {
+  if (t.status === 'sending')
+    return `<div class="completed-box" role="status">${icon('clock')}Reply queued for email delivery to ${esc(t.delivery?.recipient || t.reply_email)}.</div>`;
+  if (t.status === 'sent')
+    return `<div class="completed-box">${icon('checkcircle')}Reply sent to ${esc(t.delivery?.recipient || t.reply_email)}.</div>`;
+  if (t.delivery?.status === 'unknown')
+    return `<div class="notice-card">${icon('info')}Gmail has not confirmed this delivery. We check Sent for confirmation and will not automatically resend it. Check the mailbox before taking another action.</div>`;
+  if (t.delivery?.status === 'failed')
+    return `<div class="notice-card">${icon('warning')}${t.delivery.error === 'agent_review_required' ? 'Email was not sent because this reply now requires a person’s review. Check the current sources before responding.' : 'Email was not sent. Review the reply or check your Gmail connection before retrying.'}<button class="btn" data-action="agent-reply">Review and reply</button>${t.delivery.error === 'agent_review_required' ? '' : '<button class="btn" data-action="retry-delivery">Retry approved reply</button>'}</div>`;
   if (t.status === 'approved')
     return `<div class="completed-box">${icon('checkcircle')}Reply approved. You can copy it to send to the customer.</div>`;
   if (t.status === 'escalated')
     return `<div class="completed-box">${icon('human')}Request escalated. The decision is saved in its history.</div>`;
-  if (!t.result || state.busy) return '';
-  return `<div class="review-actions">${t.status === 'review' ? `<button class="btn btn-primary" data-action="approve">${icon('check')}Approve reply</button>` : ''}<button class="btn" data-action="escalate">${icon('human')}Escalate to an agent</button>${config.faults_enabled && retailDemo() ? `<button class="icon-btn" data-action="faults" title="Test a failure scenario" aria-label="Test a failure scenario">${icon('code')}</button>` : ''}</div>`;
+  if (
+    (!t.result && t.status !== 'manual') ||
+    state.busy ||
+    ['queued', 'processing'].includes(t.status)
+  )
+    return '';
+  return `<div class="review-actions">${t.status === 'review' ? `${!isDemo && state.replySettings.sender_ready && t.reply_email ? `<label class="gmail-consent"><input id="send-reviewed-reply" type="checkbox" checked> Send to ${esc(t.reply_email)} after approval</label>` : ''}<button class="btn btn-primary" data-action="approve">${icon('check')}Approve reply</button>` : `<button class="btn btn-primary" data-action="agent-reply">${icon('mail')}Reply as an agent</button>`}<button class="btn" data-action="escalate">${icon('human')}Escalate to an agent</button>${config.faults_enabled && retailDemo() ? `<button class="icon-btn" data-action="faults" title="Test a failure scenario" aria-label="Test a failure scenario">${icon('code')}</button>` : ''}</div>`;
 }
 function contextPanel(t, r) {
   if (!retailDemo())
@@ -576,7 +659,7 @@ function overviewPage() {
     ['inbox', 'Receive a ticket', 'Validate input and prevent duplicate requests'],
     ['box', 'Gather context', 'Order data from the API and current store policies'],
     ['spark', 'Prepare a reply', 'Verified facts and permitted next steps only'],
-    ['human', 'Review with a person', 'Edit, approve or escalate'],
+    ['human', 'Review or deliver', 'Human approval or verified automatic email'],
   ]
     .map(
       ([ic, title, sub]) =>
@@ -585,7 +668,7 @@ function overviewPage() {
     .join(
       '',
     )}</section></div><section class="panel"><h2>Need attention</h2><p>Tickets waiting for an agent’s decision</p><div class="table-scroll"><table class="data-table"><thead><tr><th>Ticket</th><th>Customer</th><th>Status</th><th></th></tr></thead><tbody>${state.tickets
-    .filter((t) => !['approved', 'escalated'].includes(t.status))
+    .filter((t) => !['approved', 'escalated', 'sent'].includes(t.status))
     .slice(0, 5)
     .map(
       (t) =>
@@ -606,7 +689,7 @@ function knowledgePage() {
 }
 function qualityPage() {
   if (!retailDemo())
-    return `${heading('Reply quality', 'Evidence and human judgment, on every proposed reply.')}<div class="section-grid"><section class="panel"><h2>Your review process</h2><div class="check-list">${['Only this workspace’s current policies are retrieved', 'The agent drafts an answer with paragraph-level citations', 'Missing evidence routes a request to an agent', 'A separate model checks grounding; an employee reviews the result', 'Approved replies retain their sources and template version'].map((c) => `<div class="check-item">${icon('checkcircle')}<span>${c}</span></div>`).join('')}</div></section><section class="panel"><h2>Business evaluation</h2><p>Each proposed reply is checked against your current workspace sources.</p><div class="notice-card">${icon('info')}Review the cited sources and the proposed answer before approving it. If evidence is missing or a check fails, the request is sent for manual review.</div></section></div>`;
+    return `${heading('Reply quality', 'Evidence and human judgment, on every proposed reply.')}<div class="section-grid"><section class="panel"><h2>Your review process</h2><div class="check-list">${['Only this workspace’s current policies are retrieved', 'The agent drafts an answer with paragraph-level citations', 'Missing evidence routes a request to an agent', 'A separate model checks grounding before human review or configured automatic delivery', 'Approved replies retain their sources and template version'].map((c) => `<div class="check-item">${icon('checkcircle')}<span>${c}</span></div>`).join('')}</div></section><section class="panel"><h2>Business evaluation</h2><p>Each proposed reply is checked against your current workspace sources.</p><div class="notice-card">${icon('info')}Review the cited sources and the proposed answer before approving it. If evidence is missing or a check fails, the request is sent for manual review.</div></section></div>`;
   const e = state.evaluation;
   const ready = e.status === 'passed' || e.status === 'failed';
   return `${heading('AI Release Guard', 'Evaluate changes before they ship. Release with evidence.', `<button class="btn" data-action="export-eval">${icon('download')}Download report</button>`)}<div class="info-strip">${icon('info')}${isDemo ? 'A snapshot of local evaluation results. The demo does not call a live model.' : 'Evaluation runs separately and gates the CI build.'}</div>${ready ? `<div class="metrics-row">${metric('Factual accuracy', `${Math.round(e.metrics.factual_accuracy * 100)}%`, 'Checks for order status, facts and sources', 'checkcircle', true)}${metric('Classification · macro-F1', e.metrics.macro_f1.toFixed(2), 'Against hand-labeled synthetic cases', 'inbox')}${metric('Escalation recall', `${Math.round(e.metrics.escalation_recall * 100)}%`, 'Requests that must reach a human', 'human')}${metric('Latency · p95', ms(e.metrics.p95_ms), `${e.cases} cases · sequential execution`, 'clock')}</div><div class="section-grid"><section class="panel"><h2>Release evaluation</h2><p>Dataset ${esc(e.dataset_version)} · ${esc(e.split)}</p><div class="quality-score"><div class="score-ring"><b>${e.passed}/${e.cases}</b><small>cases passed</small></div><div><h3>${e.status === 'passed' ? 'All checks passed' : 'Release blocked'}</h3><p>Model: ${esc(e.model)}<br>${fmtDate(e.created_at, { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}<br>${e.live ? 'Live run with an external model' : 'Deterministic baseline · no LLM spend'}</p></div></div><button class="btn" data-action="eval-info">${icon('info')}About the sample checks</button></section><section class="panel"><h2>What the guard checks</h2><p>A failed critical check blocks the pipeline</p><div class="check-list">${['Current return policies are applied', 'Shipped orders are never automatically cancelled', 'API outages route tickets to an agent', 'The model cannot add unsupported facts', 'Repeated approvals do not create duplicates'].map((c) => `<div class="check-item">${icon('checkcircle')}<span>${c}</span></div>`).join('')}</div><div class="notice-card">${icon('info')}These metrics cover the synthetic dataset. Agent productivity and live-model quality require a separate study.</div></section></div><section class="panel"><h2>Scenario results</h2><p>Isolated ${esc(e.split)} dataset · seed ${e.seed}</p><div class="table-scroll"><table class="data-table"><thead><tr><th>Scenario</th><th>Expected category</th><th>Result</th><th>Time</th></tr></thead><tbody>${(e.results || []).map((r) => `<tr><td>${esc(r.id)}<br><code>${esc(r.description)}</code></td><td>${(r.expected_categories || []).map((c) => categoryNames[c]).join(', ')}</td><td><span class="badge ${r.passed ? 'badge-review' : 'badge-manual'}">${icon(r.passed ? 'check' : 'warning')}${r.passed ? 'Passed' : 'Failed'}</span></td><td>${ms(r.duration_ms)}</td></tr>`).join('')}</tbody></table></div></section>` : `<section class="panel"><div class="empty">${icon('shield')}<strong>No sample report available</strong>The sample report is temporarily unavailable. Your workspace's source checks and human review remain available.<button class="btn" data-action="refresh">${icon('refresh')}Refresh</button></div></section>`}`;
@@ -645,6 +728,7 @@ function resetWorkspace() {
     types: [],
     intakes: [],
     gmail: {},
+    replySettings: {},
     people: [],
     billing: {},
     members: [],
@@ -676,7 +760,11 @@ function publicPage() {
   const page = `<div class="public-shell"><header class="public-header"><a class="brand" href="#register"><span class="brand-mark">${icon('logo')}</span><span>SupportOps</span><em>AI</em></a><nav class="landing-nav"><a href="#how-it-works" data-scrollto="how-it-works">How it works</a><a href="#request-sources" data-scrollto="request-sources">Channels</a><a href="#${config.demo_release ? 'demo-access' : 'pricing'}" data-scrollto="${config.demo_release ? 'demo-access' : 'pricing'}">${config.demo_release ? 'Demo access' : 'Pricing'}</a></nav><a class="btn" href="${account ? '#tickets' : mode === 'login' ? '#register' : '#login'}">${account ? 'Open workspace' : mode === 'login' ? 'Create a workspace' : 'Sign in'} ${icon('arrow')}</a></header><main class="welcome-grid"><section class="welcome-story"><span class="eyebrow">${config.demo_release ? 'DEMO VERSION · ' : ''}YOUR BUSINESS. YOUR KNOWLEDGE.</span><h1>Every request. <br>The right context. <br><em>A clearer next step.</em></h1><p>An AI workspace for the requests that keep your business moving. Connect incoming work, bring your knowledge and keep your people in control.</p><div class="welcome-steps">${[
     ['01', 'Bring your knowledge', 'Upload your rules, procedures and service policies.'],
     ['02', 'Make it sound like you', 'Create reply templates that match your brand.'],
-    ['03', 'Work better, together', 'Invite your team. Review every reply before sharing.'],
+    [
+      '03',
+      'Work better, together',
+      'Invite your team. Choose human review or verified automatic replies.',
+    ],
   ]
     .map(([n, t, d]) => `<div><span>${n}</span><section><h3>${t}</h3><p>${d}</p></section></div>`)
     .join(
@@ -711,7 +799,7 @@ function teamPage() {
 }
 function workspaceSettings() {
   const org = account.organization;
-  return `${heading('Workspace settings', 'A home for your business and your team.')}<section class="panel"><h2>${esc(businessName())}</h2><p>${esc(org?.role || 'No workspace')} access · ${esc(account.user.email)}</p>${org && canManage() ? `<form id="workspace-settings"><div class="form-grid"><label class="field">Business name<input name="name" value="${esc(org.name)}" required minlength="2" maxlength="120"></label><label class="field">Industry<input name="industry" value="${esc(org.industry || '')}" required maxlength="80"></label></div><button class="btn btn-primary">Save changes</button></form>` : '<p>Your owner or admin manages business settings.</p>'}</section><section class="panel"><h2>Your workspaces</h2><p>Each business has its own policies, templates, tickets and team.</p>${account.memberships.map((m) => `<div class="setting-row"><div><h3>${esc(m.name)}</h3><p>${esc(m.industry)} · ${esc(m.role)}${m.is_demo ? ' · Sample workspace' : ''}</p></div>${m.id === org?.id ? '<span class="badge badge-review">Current</span>' : `<button class="btn" data-switch="${esc(m.id)}">Switch workspace</button>`}</div>`).join('')}<button class="btn" data-action="${org?.is_demo ? 'register-business' : 'new-workspace'}" style="margin-top:18px">${icon('plus')}${org?.is_demo ? 'Register your business' : 'Create another business'}</button></section><section class="panel"><h2>Your account and data</h2><p>Download your account information or record a deletion request for operator review. Shared business records are handled separately.</p><button class="btn" data-action="export-account">Export my account</button> <button class="btn" data-action="email-deliveries">Email delivery status</button> <button class="btn" data-action="request-deletion">Request account deletion</button></section><section class="panel"><h2>How replies work</h2><p>Current policies are retrieved only from this workspace. Your selected template wraps the verified excerpts. An employee reviews every reply before copying it to a customer.</p><div class="notice-card">${icon('info')}Customer account and order systems are not connected to new workspaces. Requests that need live account facts require a human check. Approved replies are saved here; they are not sent automatically.</div></section>${canManage() ? `<section class="panel"><h2>Business data</h2><p>Owners can export the workspace’s requests, knowledge, routing and review history.</p><button class="btn" data-action="export-workspace">Export workspace JSON</button></section><section class="panel"><h2>Service status</h2><p>Check background processing and email delivery for this workspace.</p><button class="btn" data-action="operations-status">Background jobs</button></section><section class="panel"><h2>Recent workspace activity</h2><div class="table-scroll"><table class="data-table"><thead><tr><th>Action</th><th>When</th><th>Details</th></tr></thead><tbody>${state.audit.map((a) => `<tr><td>${esc(a.action.replaceAll('_', ' '))}</td><td>${fmtDate(a.created_at)}</td><td><code>${esc(JSON.stringify(a.details))}</code></td></tr>`).join('') || '<tr><td colspan="3">Activity will appear as your team uses the workspace.</td></tr>'}</tbody></table></div></section>` : ''}`;
+  return `${heading('Workspace settings', 'A home for your business and your team.')}<section class="panel"><h2>${esc(businessName())}</h2><p>${esc(org?.role || 'No workspace')} access · ${esc(account.user.email)}</p>${org && canManage() ? `<form id="workspace-settings"><div class="form-grid"><label class="field">Business name<input name="name" value="${esc(org.name)}" required minlength="2" maxlength="120"></label><label class="field">Industry<input name="industry" value="${esc(org.industry || '')}" required maxlength="80"></label></div><button class="btn btn-primary">Save changes</button></form>` : '<p>Your owner or admin manages business settings.</p>'}</section><section class="panel"><h2>Your workspaces</h2><p>Each business has its own policies, templates, tickets and team.</p>${account.memberships.map((m) => `<div class="setting-row"><div><h3>${esc(m.name)}</h3><p>${esc(m.industry)} · ${esc(m.role)}${m.is_demo ? ' · Sample workspace' : ''}</p></div>${m.id === org?.id ? '<span class="badge badge-review">Current</span>' : `<button class="btn" data-switch="${esc(m.id)}">Switch workspace</button>`}</div>`).join('')}<button class="btn" data-action="${org?.is_demo ? 'register-business' : 'new-workspace'}" style="margin-top:18px">${icon('plus')}${org?.is_demo ? 'Register your business' : 'Create another business'}</button></section><section class="panel"><h2>Your account and data</h2><p>Download your account information or record a deletion request for operator review. Shared business records are handled separately.</p><button class="btn" data-action="export-account">Export my account</button> <button class="btn" data-action="email-deliveries">Email delivery status</button> <button class="btn" data-action="request-deletion">Request account deletion</button></section><section class="panel"><h2>How replies work</h2><p>Current policies are retrieved only from this workspace. Your selected template wraps the verified excerpts. Choose human review before sending, or automatic delivery for eligible verified replies.</p><div class="notice-card">${icon('info')}Customer account and order systems are not connected to new workspaces. Requests that need live account facts require a human check. Approved replies can be emailed through your connected Gmail mailbox. Requests requiring a person remain in Needs an agent.</div></section>${canManage() ? `<section class="panel"><h2>Business data</h2><p>Owners can export the workspace’s requests, knowledge, routing and review history.</p><button class="btn" data-action="export-workspace">Export workspace JSON</button></section><section class="panel"><h2>Service status</h2><p>Check background processing and email delivery for this workspace.</p><button class="btn" data-action="operations-status">Background jobs</button></section><section class="panel"><h2>Recent workspace activity</h2><div class="table-scroll"><table class="data-table"><thead><tr><th>Action</th><th>When</th><th>Details</th></tr></thead><tbody>${state.audit.map((a) => `<tr><td>${esc(a.action.replaceAll('_', ' '))}</td><td>${fmtDate(a.created_at)}</td><td><code>${esc(JSON.stringify(a.details))}</code></td></tr>`).join('') || '<tr><td colspan="3">Activity will appear as your team uses the workspace.</td></tr>'}</tbody></table></div></section>` : ''}`;
 }
 function policyEditor(source = null, upload = false) {
   modal(
@@ -1016,11 +1104,11 @@ function landingSections() {
     )
     .join(
       '',
-    )}</div><p class="landing-footnote">AI supports investigation and drafting. Sensitive decisions, approvals and actions stay with authorized people.</p></section><section class="landing-section" id="request-sources"><div class="section-intro"><span class="eyebrow">WHERE REQUESTS COME FROM</span><h2>Meet work where it starts.</h2><p>New requests arrive in your company’s shared queue, with their source and request type attached.</p></div><div class="source-channels"><article><span class="channel-state ${config.public_forms_available === false ? '' : 'live'}">${config.public_forms_available === false ? 'Unavailable in this demo' : 'Available'}</span>${icon('globe')}<h3>Your request form</h3><p>${config.public_forms_available === false ? 'Use an inbound API connection or let your employees create requests in the workspace.' : 'Create a hosted form for customers, partners or other external requesters. Share its link from your website.'}</p></article><article><span class="channel-state live">Available</span>${icon('link')}<h3>Inbound API</h3><p>Send requests from a website, CRM or existing workflow with a dedicated write-only API token and duplicate protection.</p></article><article><span class="channel-state live">Available</span>${icon('human')}<h3>Your employees</h3><p>Team members create internal requests, choose a type and assign work to the right person in the workspace.</p></article><article><span class="channel-state ${config.gmail_available ? 'live' : ''}">${config.gmail_available ? 'Available' : 'Connection coming soon'}</span>${icon('mail')}<h3>Gmail</h3><p>Connect a business mailbox through Google. Matching incoming emails become requests, ready for your team to review. Other mail and messaging tools can connect through the inbound API.</p></article></div></section><section class="landing-section intelligence-section" id="ai-workflow"><div><span class="eyebrow">ANSWERS WITH A SOURCE</span><h2>An agent that starts<br>with your knowledge.</h2><p>OpenAI language models investigate requests with read-only tools. Real embeddings power semantic retrieval across your current documents. The agent can search again, inspect a passage or hand the request to a person.</p><ul>${['Company-scoped search and versioned sources', 'Paragraph-level citations and a separate grounding check', 'Your templates and request-type instructions', 'Explicit handoff when evidence or access is missing'].map((x) => `<li>${icon('checkcircle')}${x}</li>`).join('')}</ul></div><div class="agent-illustration"><div class="agent-illustration-head">${icon('spark')}Your business agent<span>Human review required</span></div>${[
+    )}</div><p class="landing-footnote">AI supports investigation and drafting. Sensitive decisions, approvals and actions stay with authorized people.</p></section><section class="landing-section" id="request-sources"><div class="section-intro"><span class="eyebrow">WHERE REQUESTS COME FROM</span><h2>Meet work where it starts.</h2><p>New requests arrive in your company’s shared queue, with their source and request type attached.</p></div><div class="source-channels"><article><span class="channel-state ${config.public_forms_available === false ? '' : 'live'}">${config.public_forms_available === false ? 'Unavailable in this demo' : 'Available'}</span>${icon('globe')}<h3>Your request form</h3><p>${config.public_forms_available === false ? 'Use an inbound API connection or let your employees create requests in the workspace.' : 'Create a hosted form for customers, partners or other external requesters. Share its link from your website.'}</p></article><article><span class="channel-state live">Available</span>${icon('link')}<h3>Inbound API</h3><p>Send requests from a website, CRM or existing workflow with a dedicated write-only API token and duplicate protection.</p></article><article><span class="channel-state live">Available</span>${icon('human')}<h3>Your employees</h3><p>Team members create internal requests, choose a type and assign work to the right person in the workspace.</p></article><article><span class="channel-state ${config.gmail_available ? 'live' : ''}">${config.gmail_available ? 'Available' : 'Connection coming soon'}</span>${icon('mail')}<h3>Gmail</h3><p>Connect a business mailbox through Google. Matching incoming emails become requests, ready for your team to review. Other mail and messaging tools can connect through the inbound API.</p></article></div></section><section class="landing-section intelligence-section" id="ai-workflow"><div><span class="eyebrow">ANSWERS WITH A SOURCE</span><h2>An agent that starts<br>with your knowledge.</h2><p>OpenAI language models investigate requests with read-only tools. Real embeddings power semantic retrieval across your current documents. The agent can search again, inspect a passage or hand the request to a person.</p><ul>${['Company-scoped search and versioned sources', 'Paragraph-level citations and a separate grounding check', 'Your templates and request-type instructions', 'Explicit handoff when evidence or access is missing'].map((x) => `<li>${icon('checkcircle')}${x}</li>`).join('')}</ul></div><div class="agent-illustration"><div class="agent-illustration-head">${icon('spark')}Your business agent<span>Your delivery settings</span></div>${[
     ['Request', '“How do I claim my hotel expenses?”'],
     ['Search & read', 'Travel policy · current version'],
     ['Prepare', 'A clear answer, with cited evidence'],
-    ['Verify & review', 'Model grounding check → your employee'],
+    ['Verify & deliver', 'Human review or verified automatic email'],
   ]
     .map(
       ([a, b], i) =>
@@ -1127,7 +1215,7 @@ function gmailCard() {
   const messages = {
     gmail_reconnect_required: 'Google access expired or was revoked. Reconnect the mailbox.',
     gmail_access_denied:
-      'Google access is unavailable. Reconnect and grant read-only Gmail access.',
+      'Google access is unavailable. Reconnect and grant the requested Gmail permissions.',
     gmail_credentials_unavailable: 'The mailbox needs to be connected again.',
     gmail_owner_access_removed:
       'The person who connected this mailbox no longer has administrator access. An administrator must reconnect it.',
@@ -1139,7 +1227,7 @@ function gmailCard() {
     gmail_request_limit_reached:
       'The workspace request allowance is reached. Your queued emails remain available for retry.',
   };
-  return `<section class="panel gmail-source"><div class="section-heading"><div><h2>${icon('mail')} Gmail</h2><p>Turn matching incoming emails into requests for this workspace.</p></div></div>${source ? `<p><strong>${esc(source.mailbox)}</strong> <span class="badge ${active ? 'badge-review' : 'badge-manual'}">${active ? 'Connected' : source.status === 'disconnected' ? 'Disconnected' : 'Reconnect required'}</span></p><p>Label: ${esc(source.label_name)} · ${Number(source.imported_count || 0)} imported · ${source.last_synced_at ? 'Last checked ' + fmtDate(source.last_synced_at, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : active ? 'Waiting for first import' : 'Import stopped'}${source.syncing || source.pending ? ' · Import in progress' : ''}</p>${source.last_error ? `<div class="notice-card">${icon('info')}${esc(messages[source.last_error] || 'Import needs attention. Try again or reconnect the mailbox.')}</div>` : ''}` : '<p>Connect a shared business mailbox through Google. Each matching email becomes a separate request; your team starts AI processing when ready.</p>'}${!state.gmail?.available ? '<p class="form-hint">Gmail connection is temporarily unavailable. Contact support for access.</p>' : ''}<div class="source-actions"><button class="btn btn-primary" data-action="gmail-connect" ${!state.gmail?.available ? 'disabled' : ''}>${source ? 'Reconnect Gmail' : 'Connect Gmail'}</button>${active ? '<button class="btn" data-action="gmail-sync">Sync now</button>' : ''}<button class="btn" data-action="gmail-refresh">Refresh status</button>${source && source.status !== 'disconnected' ? '<button class="btn" data-action="gmail-disconnect">Disconnect</button>' : ''}</div><p class="form-hint">Incoming email text is shared with this workspace. Attachments remain in Gmail. Import checks run about every ${Number(state.gmail?.sync_interval_seconds || 60)} seconds; initial backlogs can take longer. Gmail access is read-only.</p></section>`;
+  return `<section class="panel gmail-source"><div class="section-heading"><div><h2>${icon('mail')} Gmail</h2><p>Turn matching incoming emails into requests for this workspace.</p></div></div>${source ? `<p><strong>${esc(source.mailbox)}</strong> <span class="badge ${active ? 'badge-review' : 'badge-manual'}">${active ? 'Connected' : source.status === 'disconnected' ? 'Disconnected' : 'Reconnect required'}</span></p><p>Label: ${esc(source.label_name)} · ${Number(source.imported_count || 0)} imported · ${source.last_synced_at ? 'Last checked ' + fmtDate(source.last_synced_at, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : active ? 'Waiting for first import' : 'Import stopped'}${source.syncing || source.pending ? ' · Import in progress' : ''}</p>${source.last_error ? `<div class="notice-card">${icon('info')}${esc(messages[source.last_error] || 'Import needs attention. Try again or reconnect the mailbox.')}</div>` : ''}` : '<p>Connect a shared business mailbox through Google. Each matching email becomes a separate request; your team starts AI processing when ready.</p>'}${!state.gmail?.available ? '<p class="form-hint">Gmail connection is temporarily unavailable. Contact support for access.</p>' : ''}<div class="source-actions"><button class="btn btn-primary" data-action="gmail-connect" ${!state.gmail?.available ? 'disabled' : ''}>${source ? 'Reconnect Gmail' : 'Connect Gmail'}</button>${active ? '<button class="btn" data-action="gmail-sync">Sync now</button>' : ''}<button class="btn" data-action="gmail-refresh">Refresh status</button>${source && source.status !== 'disconnected' ? '<button class="btn" data-action="gmail-disconnect">Disconnect</button>' : ''}</div><p class="form-hint">Incoming email text is shared with this workspace. Attachments remain in Gmail. Import checks run about every ${Number(state.gmail?.sync_interval_seconds || 60)} seconds; initial backlogs can take longer. ${source?.send_enabled ? 'Email sending is enabled. Delivery follows your workspace settings.' : 'Gmail access is read-only. Reconnect and select send permission to enable email replies.'}</p></section>`;
 }
 function gmailEditor() {
   const source = state.gmail?.connection;
@@ -1154,7 +1242,7 @@ function gmailEditor() {
       )
       .join(
         '',
-      )}</select></label><label class="gmail-consent"><input type="checkbox" name="authorized" required> I am authorized to connect this mailbox and share imported email content with this workspace.</label><p class="form-hint">Google will ask for read-only Gmail access. Imported requests are retained if you later disconnect. No replies are sent automatically.</p><div class="form-error" role="alert"></div><div class="modal-actions"><button class="btn" type="button" data-action="close-modal">Cancel</button><button class="btn btn-primary" type="submit">Continue with Google ${icon('arrow')}</button></div></form>`,
+      )}</select></label><label class="gmail-consent"><input type="checkbox" name="authorized" required> I am authorized to connect this mailbox and share imported email content with this workspace.</label><label class="gmail-consent"><input type="checkbox" name="enable_sending" ${source?.send_enabled ? 'checked' : ''}> Allow SupportOps AI to send approved or eligible automatic replies from this mailbox.</label><p class="form-hint">Google requests read access for imports and, only when selected above, permission to send replies. Imported requests are retained if you disconnect.</p><div class="form-error" role="alert"></div><div class="modal-actions"><button class="btn" type="button" data-action="close-modal">Cancel</button><button class="btn btn-primary" type="submit">Continue with Google ${icon('arrow')}</button></div></form>`,
     true,
   );
 }
@@ -1205,6 +1293,38 @@ async function businessAction(el) {
     return true;
   }
   switch (el.dataset.action) {
+    case 'prepare-all':
+      preparationEditor();
+      return true;
+    case 'reply-settings':
+      preparationEditor(true);
+      return true;
+    case 'agent-reply':
+      agentReplyEditor();
+      return true;
+    case 'refresh-inbox': {
+      if (el.disabled) return true;
+      el.disabled = true;
+      try {
+        const result = await request('/tickets/refresh-inbox', { method: 'POST' });
+        await reload();
+        render();
+        toast(
+          result.gmail_queued
+            ? 'Gmail sync queued. Requests received through the API have been refreshed.'
+            : 'Incoming API requests refreshed. Connect Gmail in Request sources to import email.',
+        );
+      } finally {
+        el.disabled = false;
+      }
+      return true;
+    }
+    case 'retry-delivery':
+      await request('/tickets/' + state.selected + '/retry-delivery', { method: 'POST' });
+      await reload();
+      render();
+      toast('The approved reply is queued for another delivery attempt.');
+      return true;
     case 'cancel-launch-notification':
       await request('/demo/launch-notification', { method: 'DELETE' });
       await reload();
@@ -1341,6 +1461,9 @@ async function businessSubmit(form) {
       'request-type-form',
       'intake-form',
       'gmail-connect-form',
+      'prepare-all-form',
+      'reply-settings-form',
+      'agent-reply-form',
       'routing-form',
       'account-recovery',
       'privacy-request',
@@ -1354,6 +1477,48 @@ async function businessSubmit(form) {
   if (error) error.textContent = '';
   try {
     const data = Object.fromEntries(new FormData(form));
+    if (form.id === 'prepare-all-form') {
+      const result = await request('/tickets/prepare-all', { method: 'POST', body: data });
+      closeModal();
+      await reload();
+      render();
+      toast(
+        result.queued
+          ? `${result.queued} replies queued. Requests needing a person will appear in Needs an agent.`
+          : 'No new requests need preparation.',
+      );
+      return true;
+    }
+    if (form.id === 'reply-settings-form') {
+      await request('/reply-settings', { method: 'PUT', body: data });
+      closeModal();
+      await reload();
+      render();
+      toast('Reply delivery settings saved.');
+      return true;
+    }
+    if (form.id === 'agent-reply-form') {
+      await request('/tickets/' + form.dataset.ticketId + '/review', {
+        method: 'POST',
+        body: {
+          decision: 'approve',
+          text: data.text,
+          revision: Number(form.dataset.revision),
+          manual: true,
+          send: data.send === 'on',
+          note: 'Reply written and approved by a person.',
+        },
+      });
+      closeModal();
+      await reload();
+      render();
+      toast(
+        data.send === 'on'
+          ? 'Your reply is approved and queued for email delivery.'
+          : 'Your reply is approved. You can copy it to the requester.',
+      );
+      return true;
+    }
     if (form.id === 'privacy-request') {
       const result = await request('/account/deletion-request', { method: 'POST', body: data });
       closeModal();
@@ -1377,6 +1542,7 @@ async function businessSubmit(form) {
       data.lookback_days = Number(data.lookback_days);
       data.request_type_id = data.request_type_id || null;
       data.authorized = data.authorized === 'on';
+      data.enable_sending = data.enable_sending === 'on';
       const result = await request('/integrations/gmail/connect', { method: 'POST', body: data });
       location.assign(result.url);
       return true;
@@ -1576,7 +1742,13 @@ async function review(decision, note = '') {
   try {
     await request(`/tickets/${t.id}/review`, {
       method: 'POST',
-      body: { decision, text, note, revision: t.revision },
+      body: {
+        decision,
+        text,
+        note,
+        revision: t.revision,
+        send: decision === 'approve' && !!$('#send-reviewed-reply')?.checked,
+      },
     });
     if (workspace !== workspaceToken()) return;
     closeModal();
@@ -1584,7 +1756,7 @@ async function review(decision, note = '') {
     render();
     toast(
       decision === 'approve'
-        ? 'Reply approved. Your decision has been saved.'
+        ? 'Reply approved. Email delivery, when selected, is queued in the background.'
         : 'Request escalated to an agent',
     );
   } catch (e) {
@@ -1970,7 +2142,7 @@ try {
     connected: 'Gmail connected. Your mailbox is queued for import.',
     cancelled: 'Gmail connection cancelled. Your current connection was kept.',
     label_missing: 'That Gmail label was not found. Check its exact name and try again.',
-    failed: 'Gmail could not be connected. Try again and grant read-only Gmail access.',
+    failed: 'Gmail could not be connected. Try again and grant the requested Gmail permissions.',
   };
   if (gmailNotices[gmailOutcome]) {
     toast(
