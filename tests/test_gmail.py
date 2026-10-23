@@ -341,6 +341,80 @@ def test_initial_import_history_deduplication_and_html_text(gmail):
     )
 
 
+@pytest.mark.parametrize("label", ["INBOX", "Support"])
+def test_recent_inbox_scan_recovers_mail_without_another_label_event(gmail, label):
+    owner, _, _, fake = gmail
+    connect(owner, label_name=label, lookback_days=0)
+    run(owner, fake)
+    assert not owner.get("/api/tickets").json()
+
+    # Gmail's initial list and the event feed did not expose this arrival.
+    # The message is now readable with its final labels, but there is no new
+    # label event for the user to trigger or for the worker to rely on.
+    fake.add("missed-arrival")
+    fake.messages["missed-arrival"]["internalDate"] = str(
+        int(utcnow().timestamp() * 1000)
+    )
+    with owner.app.state.sessions() as db:
+        row = db.get(GmailConnection, org(owner))
+        row.scan_before = utcnow() - timedelta(minutes=2)
+        db.commit()
+    run(owner, fake)
+    status = owner.get("/api/integrations/gmail").json()["connection"]
+    assert status["phase"] == "reconcile"
+    run(owner, fake)
+    assert len(owner.get("/api/tickets").json()) == 1
+    status = owner.get("/api/integrations/gmail").json()["connection"]
+    assert status["phase"] == "history" and status["imported_count"] == 1
+    run(owner, fake, 2)
+    assert len(owner.get("/api/tickets").json()) == 1
+    history_calls = [c for c in fake.calls if c.url.path.endswith("/history")]
+    assert history_calls and all(
+        c.url.params["labelId"] == "INBOX" for c in history_calls
+    )
+    assert all(
+        c.url.params.get("startHistoryId") in {"100", "101"} for c in history_calls
+    )
+
+
+def test_reconciliation_is_bounded_restart_safe_and_keeps_history_checkpoint(gmail):
+    owner, _, _, fake = gmail
+    connect(owner, lookback_days=30)
+    run(owner, fake)
+    fake.add("recent-mail")
+    fake.add("recent-mail-2")
+    fake.page_size = 1
+    with owner.app.state.sessions() as db:
+        row = db.get(GmailConnection, org(owner))
+        row.scan_before = utcnow() - timedelta(minutes=2)
+        db.commit()
+    run(owner, fake)
+    # Each run opens fresh database sessions, like a restarted worker.
+    run(owner, fake)
+    with owner.app.state.sessions() as db:
+        row = db.get(GmailConnection, org(owner))
+        assert row.phase == "reconcile" and row.page_token == "1"
+        assert row.history_id == "101"
+        cutoff = int(row.scan_before.replace(tzinfo=utcnow().tzinfo).timestamp())
+    run(owner, fake)
+    assert len(owner.get("/api/tickets").json()) == 2
+    scans = [c for c in fake.calls if c.url.path == "/gmail/v1/users/me/messages"]
+    assert len(scans) == 3
+    assert scans[-1].url.params["q"] == scans[-2].url.params["q"]
+    query = scans[-1].url.params["q"]
+    lower = int(query.split("after:")[1].split()[0])
+    assert cutoff - 902 <= lower <= cutoff - 899
+    # A later history event still imports an older message newly labelled
+    # for the business, outside the recent reconciliation window.
+    fake.add("older-newly-labelled-mail")
+    fake.messages["older-newly-labelled-mail"]["internalDate"] = str(
+        int((utcnow() - timedelta(days=2)).timestamp() * 1000)
+    )
+    fake.history_messages = ["older-newly-labelled-mail"]
+    run(owner, fake)
+    assert len(owner.get("/api/tickets").json()) == 3
+
+
 def test_pagination_retry_and_reconnect_preserve_deduplication(gmail):
     owner, _, _, fake = gmail
     fake.page_size = 1

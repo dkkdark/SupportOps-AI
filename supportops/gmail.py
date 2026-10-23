@@ -355,13 +355,18 @@ def locked_connection(db, snapshot):
 
 
 def page(google, access, row):
-    if row.phase == "initial":
+    if row.phase in {"initial", "reconcile"}:
+        since = aware(row.import_since)
+        if row.phase == "reconcile":
+            # History is the primary feed. An overlapping, bounded Inbox scan
+            # recovers recent matching mail absent from the event feed.
+            since = max(since, aware(row.scan_before) - timedelta(minutes=15))
         params = {
             "maxResults": 10,
             "labelIds": ["INBOX"]
             if row.label_id == "INBOX"
             else ["INBOX", row.label_id],
-            "q": f"after:{int(aware(row.import_since).timestamp()) - 1} before:{int(aware(row.scan_before).timestamp()) + 1}",
+            "q": f"after:{int(since.timestamp()) - 1} before:{int(aware(row.scan_before).timestamp()) + 1}",
             "includeSpamTrash": "false",
         }
         url = API + "/messages"
@@ -376,7 +381,7 @@ def page(google, access, row):
     if row.page_token:
         params["pageToken"] = row.page_token
     result = google.request("GET", url, access, params=params)
-    if row.phase == "initial":
+    if row.phase in {"initial", "reconcile"}:
         ids = [valid_id(m.get("id")) for m in result.get("messages", [])]
         target = None
     else:
@@ -398,14 +403,22 @@ def page(google, access, row):
 
 def finish_batch(config, row):
     if not row.pending_ids and row.batch_final:
-        if row.phase == "initial":
+        if row.phase in {"initial", "reconcile"}:
             row.phase, row.last_synced_at = "history", row.scan_before
             row.next_sync_at = utcnow()
         else:
             row.history_id, row.last_synced_at = row.target_history_id, utcnow()
-            row.next_sync_at = utcnow() + timedelta(
+            if aware(row.scan_before) <= utcnow() - timedelta(
                 seconds=config.gmail_sync_interval_seconds
-            )
+            ):
+                # Keep the completed history checkpoint during reconciliation.
+                # Any changes arriving during the scan remain in the next feed.
+                row.phase, row.scan_before = "reconcile", utcnow()
+                row.next_sync_at = utcnow()
+            else:
+                row.next_sync_at = utcnow() + timedelta(
+                    seconds=config.gmail_sync_interval_seconds
+                )
         row.target_history_id, row.batch_final = None, False
     else:
         row.next_sync_at = utcnow() + timedelta(seconds=5)
