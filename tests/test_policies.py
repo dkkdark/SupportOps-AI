@@ -20,7 +20,7 @@ def test_public_notices_are_complete_and_use_current_release_details(platform):
         ):
             assert unfinished not in response.text
     terms = client.get("/terms").text
-    assert "10 registered accounts" in terms
+    assert "10 business workspaces" in terms
     assert "$5.00" in terms
     privacy = client.get("/privacy").text
     assert "OpenAI" in privacy and "Cloudflare Turnstile" in privacy

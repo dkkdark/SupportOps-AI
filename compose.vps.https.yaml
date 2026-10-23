@@ -1,7 +1,7 @@
 # Public HTTPS endpoint; signup fails closed until real Turnstile keys are set.
 x-public-environment: &public-environment
   APP_ENV: production
-  REGISTRATION_LIMIT: "10"
+  WORKSPACE_LIMIT: "10"
   LEGAL_BUSINESS_NAME: ${LEGAL_BUSINESS_NAME:-Kseniia Blokhina}
   LEGAL_COUNTRY: ${LEGAL_COUNTRY:-Germany}
   LEGAL_CONTACT_EMAIL: ${LEGAL_CONTACT_EMAIL:-info.xenonimus@gmail.com}

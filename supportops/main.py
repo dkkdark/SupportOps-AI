@@ -314,12 +314,12 @@ def create_app(
         from supportops.registration import available
 
         with sessions() as db:
-            registration_available = available(db, config.registration_limit)
+            registration_available = available(db, config.workspace_limit)
 
         return {
             "mode": "api",
             "registration_available": registration_available,
-            "registration_limit": config.registration_limit,
+            "workspace_limit": config.workspace_limit,
             "public_forms_available": config.public_intake_enabled
             and (
                 config.app_env != "production"

@@ -75,7 +75,7 @@ def render_policy(config, kind):
             ),
             (
                 "Accounts and early access",
-                f"This release has a service-wide limit of {config.registration_limit} registered accounts, including existing accounts and new users joining by invitation. New registrations pause when all places are taken; existing users can continue to sign in. Workspace owners manage membership and access. Keep your password private and contact us promptly if you suspect unauthorized use.",
+                f"This release has a service-wide limit of {config.workspace_limit} business workspaces. Creating a new workspace pauses when all places are taken; existing workspaces can still invite employees, and existing users can continue to sign in. There is no service-wide account limit. Workspace owners manage membership and access. Keep your password private and contact us promptly if you suspect unauthorized use.",
             ),
             (
                 "Demo access and AI allowance",

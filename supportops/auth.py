@@ -336,7 +336,7 @@ class Auth:
             tasks: BackgroundTasks,
         ):
             with self.sessions() as db:
-                require_capacity(db, self.config.registration_limit)
+                require_capacity(db, self.config.workspace_limit)
             self.throttle(request, "register", limit=10)
             if (
                 self.config.app_env == "production"
@@ -352,7 +352,7 @@ class Auth:
                         409,
                         "An account with this email already exists. Sign in instead.",
                     )
-                require_capacity(db, self.config.registration_limit)
+                require_capacity(db, self.config.workspace_limit)
                 user = User(
                     id=identifier(),
                     name=body.name,
@@ -417,7 +417,7 @@ class Auth:
             self.throttle(request, "demo", limit=20)
             with self.sessions() as db:
                 lock_registration(db)
-                require_capacity(db, self.config.registration_limit)
+                require_capacity(db, self.config.workspace_limit)
                 user = User(
                     id=identifier(),
                     name="Alex Morgan",
@@ -489,6 +489,8 @@ class Auth:
                 )
             self.throttle(request, "new-workspace", actor.user_id, limit=10)
             with self.sessions() as db:
+                lock_registration(db)
+                require_capacity(db, self.config.workspace_limit)
                 user = db.get(User, actor.user_id)
                 org = create_organization(db, body.name, body.industry, user)
                 db.get(LoginSession, actor.session_hash).organization_id = org.id
@@ -690,7 +692,6 @@ class Auth:
                             401, "Enter the password for your existing account."
                         )
                 else:
-                    require_capacity(db, self.config.registration_limit)
                     user = User(
                         id=identifier(),
                         name=body.name,

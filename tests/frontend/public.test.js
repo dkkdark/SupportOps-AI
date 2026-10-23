@@ -29,6 +29,16 @@ test('full registration shows availability notice while sign-in remains usable',
   assert.equal(ui.document.getElementById('platform-auth').dataset.mode, 'login');
 });
 
+test('a full workspace allocation still lets invited employees join', async (t) => {
+  const ui = await workspace(t, {
+    hash: 'join/synthetic-invitation-token',
+    authenticated: false,
+    config: { registration_available: false },
+  });
+  assert.equal(ui.document.getElementById('platform-auth').dataset.mode, 'join');
+  assert.match(ui.document.getElementById('signup').textContent, /Join your team/);
+});
+
 test('last-slot race replaces a stale signup form with the closed notice', async (t) => {
   const ui = await workspace(t, {
     hash: 'register',
