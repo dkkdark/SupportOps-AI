@@ -3176,3 +3176,27 @@ h1 {
   margin: 6px 0 0;
   line-height: 1.6;
 }
+
+.gmail-source {
+  margin-bottom: 24px;
+}
+.gmail-source h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gmail-source .source-actions {
+  flex-wrap: wrap;
+}
+.gmail-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 20px 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.gmail-consent input {
+  margin-top: 4px;
+  flex-shrink: 0;
+}

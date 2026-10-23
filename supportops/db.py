@@ -551,3 +551,63 @@ def make_database(url):
             connection.execute("PRAGMA foreign_keys=ON")
 
     return engine, sessionmaker(engine, expire_on_commit=False)
+
+
+class GmailOAuthState(Base):
+    __tablename__ = "gmail_oauth_states"
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), index=True
+    )
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    session_hash: Mapped[str] = mapped_column(String(64))
+    verifier_encrypted: Mapped[str] = mapped_column(Text)
+    options: Mapped[dict] = mapped_column(JSON)
+    used: Mapped[bool] = mapped_column(Boolean, default=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
+class GmailConnection(Base):
+    __tablename__ = "gmail_connections"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "request_type_id"],
+            ["request_types.organization_id", "request_types.id"],
+        ),
+    )
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), primary_key=True
+    )
+    id: Mapped[str] = mapped_column(String(40), unique=True)
+    mailbox: Mapped[str] = mapped_column(String(160))
+    label_id: Mapped[str] = mapped_column(String(120), default="INBOX")
+    label_name: Mapped[str] = mapped_column(String(100), default="INBOX")
+    request_type_id: Mapped[str | None] = mapped_column(String(40))
+    connected_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    refresh_token_encrypted: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(30), default="active")
+    generation: Mapped[int] = mapped_column(Integer, default=1)
+    import_since: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    scan_before: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    phase: Mapped[str] = mapped_column(String(20), default="initial")
+    history_id: Mapped[str] = mapped_column(String(40))
+    target_history_id: Mapped[str | None] = mapped_column(String(40))
+    page_token: Mapped[str | None] = mapped_column(Text)
+    batch_final: Mapped[bool] = mapped_column(Boolean, default=False)
+    pending_ids: Mapped[list] = mapped_column(JSON, default=list)
+    next_sync_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, index=True
+    )
+    lease_token: Mapped[str | None] = mapped_column(String(40))
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(String(80))
+    imported_count: Mapped[int] = mapped_column(Integer, default=0)
+    skipped_count: Mapped[int] = mapped_column(Integer, default=0)
+    failures: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )

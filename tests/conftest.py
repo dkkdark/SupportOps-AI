@@ -29,6 +29,9 @@ def offline_defaults(monkeypatch):
         "STRIPE_WEBHOOK_SECRET",
         "TURNSTILE_SITE_KEY",
         "TURNSTILE_SECRET_KEY",
+        "GOOGLE_OAUTH_CLIENT_ID",
+        "GOOGLE_OAUTH_CLIENT_SECRET",
+        "GMAIL_TOKEN_ENCRYPTION_KEY",
     ):
         monkeypatch.setenv(key, "")
     monkeypatch.setenv("SMTP_SSL", "false")

@@ -98,6 +98,7 @@ const state = {
   templates: [],
   types: [],
   intakes: [],
+  gmail: {},
   people: [],
   billing: {},
   plans: [],
@@ -194,6 +195,7 @@ async function reload() {
     people,
     billing,
     plans,
+    gmail,
   ] = await Promise.all([
     request('/tickets'),
     request('/knowledge'),
@@ -208,6 +210,7 @@ async function reload() {
     isDemo ? [] : request('/directory'),
     isDemo ? {} : request('/billing'),
     isDemo ? [] : request('/plans'),
+    !isDemo && canManage() ? request('/integrations/gmail') : {},
   ]).catch((error) => {
     if (workspace !== workspaceToken() || version !== reloadVersion) return [];
     throw error;
@@ -223,6 +226,7 @@ async function reload() {
     people,
     billing,
     plans,
+    gmail,
     templates,
     members: members.map((m) => ({ ...m, id: m.user_id })),
     invitations,
@@ -594,6 +598,7 @@ function resetWorkspace() {
     templates: [],
     types: [],
     intakes: [],
+    gmail: {},
     people: [],
     billing: {},
     members: [],
@@ -965,7 +970,7 @@ function landingSections() {
     )
     .join(
       '',
-    )}</div><p class="landing-footnote">AI supports investigation and drafting. Sensitive decisions, approvals and actions stay with authorized people.</p></section><section class="landing-section" id="request-sources"><div class="section-intro"><span class="eyebrow">WHERE REQUESTS COME FROM</span><h2>Meet work where it starts.</h2><p>New requests arrive in your company’s shared queue, with their source and request type attached.</p></div><div class="source-channels"><article><span class="channel-state ${config.public_forms_available === false ? '' : 'live'}">${config.public_forms_available === false ? 'Unavailable in this demo' : 'Available'}</span>${icon('globe')}<h3>Your request form</h3><p>${config.public_forms_available === false ? 'Use an inbound API connection or let your employees create requests in the workspace.' : 'Create a hosted form for customers, partners or other external requesters. Share its link from your website.'}</p></article><article><span class="channel-state live">Available</span>${icon('link')}<h3>Inbound API</h3><p>Send requests from a website, CRM or existing workflow with a dedicated write-only API token and duplicate protection.</p></article><article><span class="channel-state live">Available</span>${icon('human')}<h3>Your employees</h3><p>Team members create internal requests, choose a type and assign work to the right person in the workspace.</p></article><article><span class="channel-state">Requires integration</span>${icon('mail')}<h3>Email & messengers</h3><p>Connect your mail or messaging provider through an API adapter. Email and messenger requests can be imported through your business integration.</p></article></div></section><section class="landing-section intelligence-section" id="ai-workflow"><div><span class="eyebrow">ANSWERS WITH A SOURCE</span><h2>An agent that starts<br>with your knowledge.</h2><p>OpenAI language models investigate requests with read-only tools. Real embeddings power semantic retrieval across your current documents. The agent can search again, inspect a passage or hand the request to a person.</p><ul>${['Company-scoped search and versioned sources', 'Paragraph-level citations and a separate grounding check', 'Your templates and request-type instructions', 'Explicit handoff when evidence or access is missing'].map((x) => `<li>${icon('checkcircle')}${x}</li>`).join('')}</ul></div><div class="agent-illustration"><div class="agent-illustration-head">${icon('spark')}Your business agent<span>Human review required</span></div>${[
+    )}</div><p class="landing-footnote">AI supports investigation and drafting. Sensitive decisions, approvals and actions stay with authorized people.</p></section><section class="landing-section" id="request-sources"><div class="section-intro"><span class="eyebrow">WHERE REQUESTS COME FROM</span><h2>Meet work where it starts.</h2><p>New requests arrive in your company’s shared queue, with their source and request type attached.</p></div><div class="source-channels"><article><span class="channel-state ${config.public_forms_available === false ? '' : 'live'}">${config.public_forms_available === false ? 'Unavailable in this demo' : 'Available'}</span>${icon('globe')}<h3>Your request form</h3><p>${config.public_forms_available === false ? 'Use an inbound API connection or let your employees create requests in the workspace.' : 'Create a hosted form for customers, partners or other external requesters. Share its link from your website.'}</p></article><article><span class="channel-state live">Available</span>${icon('link')}<h3>Inbound API</h3><p>Send requests from a website, CRM or existing workflow with a dedicated write-only API token and duplicate protection.</p></article><article><span class="channel-state live">Available</span>${icon('human')}<h3>Your employees</h3><p>Team members create internal requests, choose a type and assign work to the right person in the workspace.</p></article><article><span class="channel-state ${config.gmail_available ? 'live' : ''}">${config.gmail_available ? 'Available' : 'Connection coming soon'}</span>${icon('mail')}<h3>Gmail</h3><p>Connect a business mailbox through Google. Matching incoming emails become requests, ready for your team to review. Other mail and messaging tools can connect through the inbound API.</p></article></div></section><section class="landing-section intelligence-section" id="ai-workflow"><div><span class="eyebrow">ANSWERS WITH A SOURCE</span><h2>An agent that starts<br>with your knowledge.</h2><p>OpenAI language models investigate requests with read-only tools. Real embeddings power semantic retrieval across your current documents. The agent can search again, inspect a passage or hand the request to a person.</p><ul>${['Company-scoped search and versioned sources', 'Paragraph-level citations and a separate grounding check', 'Your templates and request-type instructions', 'Explicit handoff when evidence or access is missing'].map((x) => `<li>${icon('checkcircle')}${x}</li>`).join('')}</ul></div><div class="agent-illustration"><div class="agent-illustration-head">${icon('spark')}Your business agent<span>Human review required</span></div>${[
     ['Request', '“How do I claim my hotel expenses?”'],
     ['Search & read', 'Travel policy · current version'],
     ['Prepare', 'A clear answer, with cited evidence'],
@@ -1006,8 +1011,8 @@ function landingSections() {
     [
       'Where do requests come from?',
       config.public_forms_available === false
-        ? 'From an inbound API connection or your employees. Connect your website, CRM, email or messaging tools through the API. Public forms are unavailable in this demo.'
-        : 'From your hosted form, a scoped inbound API, or your employees. Email and messaging tools can send requests through an API integration.',
+        ? 'From your employees, a connected Gmail mailbox when available, or an inbound API connection for your website, CRM and other systems. Public forms are unavailable in this demo.'
+        : 'From your hosted form, a scoped inbound API, a connected Gmail mailbox when available, or your employees. Other email and messaging tools can use an API integration.',
     ],
     [
       'What happens when the demo AI allowance runs out?',
@@ -1068,7 +1073,44 @@ function requestTypesPage() {
 function sourcesPage() {
   if (!canManage())
     return `${heading('Request sources', 'Your administrators manage inbound connections.')}<section class="panel">Ask an owner or admin to connect a form or another system.</section>`;
-  return `${heading('Request sources', 'Bring incoming work into this business’s shared queue.', '<button class="btn btn-primary" data-action="new-intake">' + icon('plus') + 'Connect a source</button>')}<div class="info-strip">${icon('info')}${config.public_forms_available === false ? 'Connect a website or business system through the inbound API. Public forms are unavailable in this demo.' : 'Hosted forms and scoped API connections bring requests into your workspace.'} Email and messenger tools can connect through an API integration.</div><div class="document-grid">${state.intakes.map((c) => `<section class="document-card"><span class="document-icon">${icon(c.kind === 'form' ? 'globe' : 'link')}</span><h3>${esc(c.name)}</h3><p>${c.kind === 'form' ? 'A public request form' : 'A write-only inbound API connection'}</p><div class="source-meta"><span class="badge ${c.active ? 'badge-review' : ''}">${c.active ? 'Active' : 'Revoked'}</span></div><label class="field source-url">${c.kind === 'form' ? 'Shareable form link' : 'Inbound endpoint'}<input readonly value="${esc(c.url)}"></label><div class="source-actions">${c.active ? `${c.kind === 'form' ? `<a class="btn" href="${esc(c.url)}" target="_blank" rel="noopener">Open form ${icon('external')}</a>` : ''}<button class="btn" data-revoke-intake="${esc(c.id)}">Revoke connection</button>` : ''}</div></section>`).join('') || `<section class="panel"><div class="empty">No connections yet. ${config.public_forms_available === false ? 'Connect your system through the inbound API.' : 'Create a public form or an inbound API connection.'}</div></section>`}</div><section class="panel"><h2>Connect your existing systems</h2><p>A website or CRM can send a request to its dedicated inbound endpoint with a Bearer token. Include an external_id to prevent duplicate imports. The credential can create requests only; it cannot read your queue or trigger AI.</p><p class="form-hint">Tokens are shown once. Revoke a connection if a token is lost. Public forms include a security check when available.</p></section>`;
+  return `${heading('Request sources', 'Bring incoming work into this business’s shared queue.', '<button class="btn btn-primary" data-action="new-intake">' + icon('plus') + 'Connect a source</button>')}<div class="info-strip">${icon('info')}${config.public_forms_available === false ? 'Connect a website or business system through the inbound API. Public forms are unavailable in this demo.' : 'Hosted forms and scoped API connections bring requests into your workspace.'} Connect a Gmail mailbox below, or use an API integration for another system.</div>${gmailCard()}<div class="document-grid">${state.intakes.map((c) => `<section class="document-card"><span class="document-icon">${icon(c.kind === 'form' ? 'globe' : 'link')}</span><h3>${esc(c.name)}</h3><p>${c.kind === 'form' ? 'A public request form' : 'A write-only inbound API connection'}</p><div class="source-meta"><span class="badge ${c.active ? 'badge-review' : ''}">${c.active ? 'Active' : 'Revoked'}</span></div><label class="field source-url">${c.kind === 'form' ? 'Shareable form link' : 'Inbound endpoint'}<input readonly value="${esc(c.url)}"></label><div class="source-actions">${c.active ? `${c.kind === 'form' ? `<a class="btn" href="${esc(c.url)}" target="_blank" rel="noopener">Open form ${icon('external')}</a>` : ''}<button class="btn" data-revoke-intake="${esc(c.id)}">Revoke connection</button>` : ''}</div></section>`).join('') || `<section class="panel"><div class="empty">No form or API connections yet. ${config.public_forms_available === false ? 'Connect your system through the inbound API.' : 'Create a public form or an inbound API connection.'}</div></section>`}</div><section class="panel"><h2>Connect your existing systems</h2><p>A website or CRM can send a request to its dedicated inbound endpoint with a Bearer token. Include an external_id to prevent duplicate imports. The credential can create requests only; it cannot read your queue or trigger AI.</p><p class="form-hint">Tokens are shown once. Revoke a connection if a token is lost. Public forms include a security check when available.</p></section>`;
+}
+function gmailCard() {
+  const source = state.gmail?.connection;
+  const active = source?.status === 'active';
+  const messages = {
+    gmail_reconnect_required: 'Google access expired or was revoked. Reconnect the mailbox.',
+    gmail_access_denied:
+      'Google access is unavailable. Reconnect and grant read-only Gmail access.',
+    gmail_credentials_unavailable: 'The mailbox needs to be connected again.',
+    gmail_owner_access_removed:
+      'The person who connected this mailbox no longer has administrator access. An administrator must reconnect it.',
+    gmail_routing_unavailable:
+      'The selected request type is unavailable. Reconnect with an active type.',
+    gmail_rate_limited: 'Google is limiting requests. Import will retry automatically.',
+    gmail_temporarily_unavailable:
+      'Gmail is temporarily unavailable. Import will retry automatically.',
+    gmail_request_limit_reached:
+      'The workspace request allowance is reached. Your queued emails remain available for retry.',
+  };
+  return `<section class="panel gmail-source"><div class="section-heading"><div><h2>${icon('mail')} Gmail</h2><p>Turn matching incoming emails into requests for this workspace.</p></div></div>${source ? `<p><strong>${esc(source.mailbox)}</strong> <span class="badge ${active ? 'badge-review' : 'badge-manual'}">${active ? 'Connected' : source.status === 'disconnected' ? 'Disconnected' : 'Reconnect required'}</span></p><p>Label: ${esc(source.label_name)} · ${Number(source.imported_count || 0)} imported · ${source.last_synced_at ? 'Last checked ' + fmtDate(source.last_synced_at, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : active ? 'Waiting for first import' : 'Import stopped'}${source.syncing || source.pending ? ' · Import in progress' : ''}</p>${source.last_error ? `<div class="notice-card">${icon('info')}${esc(messages[source.last_error] || 'Import needs attention. Try again or reconnect the mailbox.')}</div>` : ''}` : '<p>Connect a shared business mailbox through Google. Each matching email becomes a separate request; your team starts AI processing when ready.</p>'}${!state.gmail?.available ? '<p class="form-hint">Gmail connection is temporarily unavailable. Contact support for access.</p>' : ''}<div class="source-actions"><button class="btn btn-primary" data-action="gmail-connect" ${!state.gmail?.available ? 'disabled' : ''}>${source ? 'Reconnect Gmail' : 'Connect Gmail'}</button>${active ? '<button class="btn" data-action="gmail-sync">Sync now</button>' : ''}<button class="btn" data-action="gmail-refresh">Refresh status</button>${source && source.status !== 'disconnected' ? '<button class="btn" data-action="gmail-disconnect">Disconnect</button>' : ''}</div><p class="form-hint">Incoming email text is shared with this workspace. Attachments remain in Gmail. Import checks run about every ${Number(state.gmail?.sync_interval_seconds || 60)} seconds; initial backlogs can take longer. Gmail access is read-only.</p></section>`;
+}
+function gmailEditor() {
+  const source = state.gmail?.connection;
+  modal(
+    'Connect a Gmail mailbox',
+    'Choose a business mailbox that this workspace is authorized to use.',
+    `<form id="gmail-connect-form"><label class="field">Gmail label<input name="label_name" required maxlength="100" value="${esc(source?.label_name || 'INBOX')}" placeholder="INBOX or an exact custom label name"></label><p class="form-hint">Only incoming Inbox messages carrying this label are imported. Use a Gmail filter to apply a dedicated label for business requests.</p><label class="field">First import<select name="lookback_days"><option value="0">New emails from now on</option><option value="7">Include the last 7 days</option><option value="30">Include the last 30 days</option></select></label><label class="field">Request type<select name="request_type_id"><option value="">General request</option>${state.types
+      .filter((type) => type.active)
+      .map(
+        (type) =>
+          `<option value="${esc(type.id)}" ${source?.request_type_id === type.id ? 'selected' : ''}>${esc(type.name)}</option>`,
+      )
+      .join(
+        '',
+      )}</select></label><label class="gmail-consent"><input type="checkbox" name="authorized" required> I am authorized to connect this mailbox and share imported email content with this workspace.</label><p class="form-hint">Google will ask for read-only Gmail access. Imported requests are retained if you later disconnect. No replies are sent automatically.</p><div class="form-error" role="alert"></div><div class="modal-actions"><button class="btn" type="button" data-action="close-modal">Cancel</button><button class="btn btn-primary" type="submit">Continue with Google ${icon('arrow')}</button></div></form>`,
+    true,
+  );
 }
 function typeEditor(id) {
   const t = state.types.find((t) => t.id === id);
@@ -1182,6 +1224,31 @@ async function businessAction(el) {
           : 'Email delivery is temporarily unavailable. Your request is saved; contact support for help.',
       );
       return true;
+    case 'gmail-connect':
+      gmailEditor();
+      return true;
+    case 'gmail-refresh':
+      await reload();
+      render();
+      return true;
+    case 'gmail-sync':
+      await request('/integrations/gmail/sync', { method: 'POST' });
+      toast('Gmail import queued. The background worker will check this mailbox.');
+      return true;
+    case 'gmail-disconnect':
+      modal(
+        'Disconnect Gmail?',
+        'Stop importing emails into this workspace.',
+        '<p class="modal-prose">Stored Gmail access will be deleted. Imported requests stay in your workspace. You can also remove the app’s permission in your Google Account.</p><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn btn-primary" data-action="gmail-disconnect-confirm">Disconnect Gmail</button></div>',
+      );
+      return true;
+    case 'gmail-disconnect-confirm':
+      await request('/integrations/gmail/disconnect', { method: 'POST' });
+      closeModal();
+      await reload();
+      render();
+      toast('Gmail disconnected. Imported requests are retained.');
+      return true;
     case 'new-intake':
       modal(
         'Connect a request source',
@@ -1227,6 +1294,7 @@ async function businessSubmit(form) {
     ![
       'request-type-form',
       'intake-form',
+      'gmail-connect-form',
       'routing-form',
       'account-recovery',
       'privacy-request',
@@ -1258,6 +1326,14 @@ async function businessSubmit(form) {
       data.assigned_to = data.assigned_to || null;
       data.revision = state.detail.revision;
       await request('/tickets/' + state.selected + '/routing', { method: 'PATCH', body: data });
+    }
+    if (form.id === 'gmail-connect-form') {
+      data.lookback_days = Number(data.lookback_days);
+      data.request_type_id = data.request_type_id || null;
+      data.authorized = data.authorized === 'on';
+      const result = await request('/integrations/gmail/connect', { method: 'POST', body: data });
+      location.assign(result.url);
+      return true;
     }
     if (form.id === 'intake-form') {
       data.request_type_id = data.request_type_id || null;
@@ -1838,6 +1914,26 @@ try {
         : 'tickets';
   render();
   if (account && location.hash.startsWith('#join/')) renderJoinPrompt();
+  const params = new URLSearchParams(location.search);
+  const gmailOutcome = params.get('gmail');
+  const gmailNotices = {
+    connected: 'Gmail connected. Your mailbox is queued for import.',
+    cancelled: 'Gmail connection cancelled. Your current connection was kept.',
+    label_missing: 'That Gmail label was not found. Check its exact name and try again.',
+    failed: 'Gmail could not be connected. Try again and grant read-only Gmail access.',
+  };
+  if (gmailNotices[gmailOutcome]) {
+    toast(
+      gmailNotices[gmailOutcome],
+      gmailOutcome === 'failed' || gmailOutcome === 'label_missing',
+    );
+    params.delete('gmail');
+    history.replaceState(
+      null,
+      '',
+      location.pathname + (params.size ? '?' + params : '') + location.hash,
+    );
+  }
 } catch (e) {
   $('#app').innerHTML =
     `<div class="error-screen"><h2>Could not open the workspace</h2><p>${esc(e.message)}</p><p>Check that the SupportOps server is running and reachable.</p><button class="btn" data-action="reload-page">Try again</button></div>`;

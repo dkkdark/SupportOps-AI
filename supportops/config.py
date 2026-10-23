@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     agent_monthly_limit: int = Field(default=100, ge=1)
     request_monthly_limit: int = Field(default=1000, ge=1)
     public_base_url: str = "http://127.0.0.1:8010"
+    google_oauth_client_id: str = ""
+    google_oauth_client_secret: str = ""
+    gmail_token_encryption_key: str = ""
+    gmail_sync_interval_seconds: int = Field(default=60, ge=30, le=3600)
     turnstile_site_key: str = ""
     turnstile_secret_key: str = ""
     require_signup_captcha: bool = True

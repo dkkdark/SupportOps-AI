@@ -36,7 +36,11 @@ def render_policy(config, kind):
             ),
             (
                 "Service providers",
-                "The VPS is hosted by OVHcloud. OpenAI provides the language and embedding models. Google Gmail delivers account-verification and recovery emails. Cloudflare Turnstile checks registration requests for abuse. Business records and the Qdrant knowledge index are stored on the service's server. Information is shared with a provider only as needed for its role; the service does not read your Gmail inbox.",
+                "The VPS is hosted by OVHcloud. OpenAI provides the language and embedding models. Google Gmail delivers account-verification and recovery emails and, when an administrator connects a mailbox, supplies the selected incoming messages through the Gmail API. Cloudflare Turnstile checks registration requests for abuse. Business records and the Qdrant knowledge index are stored on the service's server. Information is shared with a provider only as needed for its role.",
+            ),
+            (
+                "Connected Gmail mailboxes",
+                "Connecting Gmail is optional and requires administrator authorization and Google consent to read-only Gmail access. The service imports incoming Inbox messages carrying the selected label, from the selected starting period, into the workspace for its authorized team. Sender details, subjects and readable email text are stored as requests. Attachments are not downloaded; long emails may be shortened. Email import alone does not invoke an AI model. When an employee prepares a reply, imported request text is processed by OpenAI as described above. Gmail information is used only to provide these user-facing features, not for advertising, sale or training general-purpose AI models. Our use and transfer of information received from Google APIs adheres to the Google API Services User Data Policy, including its Limited Use requirements. OAuth refresh tokens are encrypted in the database. Disconnecting stops import and deletes this workspace's stored Gmail credential and queued OAuth states; previously imported requests remain business records. You can also revoke the app's grant in your Google Account. Expired connection states are removed by background maintenance.",
             ),
             (
                 "Processing locations",
@@ -62,6 +66,10 @@ def render_policy(config, kind):
             ),
             ("OpenAI business data", "https://openai.com/enterprise-privacy/"),
             ("Google privacy", "https://policies.google.com/privacy"),
+            (
+                "Google API Services User Data Policy",
+                "https://developers.google.com/terms/api-services-user-data-policy",
+            ),
             ("Cloudflare privacy", "https://www.cloudflare.com/privacypolicy/"),
         ]
     else:
@@ -123,7 +131,7 @@ def render_policy(config, kind):
         '<link rel="stylesheet" href="/assets/style.css"></head><body><main class="policy-document">'
         '<a href="/">← SupportOps AI</a><h1>'
         + title
-        + "</h1><p>Effective date: 22 October 2026</p>"
+        + "</h1><p>Effective date: 23 October 2026</p>"
         + content
         + "<section><h2>Further information</h2><p>"
         + references

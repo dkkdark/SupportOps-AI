@@ -6,6 +6,7 @@ from supportops.db import (
     AccountEmailJob,
     AuthThrottle,
     IndexJob,
+    GmailOAuthState,
     LoginSession,
     RecoveryToken,
     WorkerHeartbeat,
@@ -30,6 +31,7 @@ def maintenance(sessions):
             (LoginSession, LoginSession.expires_at < now - timedelta(days=1)),
             (RecoveryToken, RecoveryToken.expires_at < now - timedelta(days=7)),
             (AuthThrottle, AuthThrottle.window_start < now - timedelta(days=1)),
+            (GmailOAuthState, GmailOAuthState.expires_at < now),
             (
                 AccountEmailJob,
                 AccountEmailJob.status.in_(["sent", "cancelled", "failed"])
@@ -98,6 +100,11 @@ def cycle(config, sessions, worker_id, housekeeping=False):
     progress()
     details["emails_sent"] = run_pending(config, sessions)
     details["index_jobs_checked"] = index_pending(config, sessions, progress)
+    from supportops.gmail import poll_pending
+
+    details["gmail_sources_checked"] = poll_pending(
+        config, sessions, on_progress=progress
+    )
     if housekeeping:
         details["maintenance"] = maintenance(sessions)
     progress()

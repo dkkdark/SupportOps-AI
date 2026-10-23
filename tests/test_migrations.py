@@ -37,7 +37,7 @@ def test_legacy_rows_are_archived_and_migration_is_repeatable(tmp_path):
         assert not conn.execute(text("PRAGMA foreign_key_check")).all()
         assert (
             conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-            == "006"
+            == "007"
         )
     engine.dispose()
 

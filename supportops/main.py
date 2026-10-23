@@ -23,10 +23,12 @@ from supportops.intake import (
     context_dict,
 )
 from supportops.launch import launch_router
+from supportops.gmail import gmail_router
+from supportops.gmail_api import ready as gmail_ready
 from supportops.accounts import accounts_router
 from supportops.operations import operations_router
 from supportops.agent import build_agent_graph
-from supportops.auth import Auth, Identity, audit
+from supportops.auth import Auth, Identity, audit, aware
 from supportops.config import Settings, settings
 from supportops.content import content_router
 from supportops.db import (
@@ -71,8 +73,8 @@ def ticket_dict(ticket):
     return {
         **{key: getattr(ticket, key) for key in fields},
         **context_dict(ticket),
-        "created_at": ticket.created_at.isoformat(),
-        "updated_at": ticket.updated_at.isoformat(),
+        "created_at": aware(ticket.created_at).isoformat(),
+        "updated_at": aware(ticket.updated_at).isoformat(),
     }
 
 
@@ -140,6 +142,7 @@ def create_app(
     embedding_transport=None,
     billing_transport=None,
     vector_transport=None,
+    gmail_transport=None,
 ):
     config = config or settings()
     engine, sessions = make_database(config.database_url)
@@ -147,6 +150,7 @@ def create_app(
     auth.embedding_transport = embedding_transport
     auth.vector_transport = vector_transport
     auth.config = config
+    auth.gmail_transport = gmail_transport
 
     @asynccontextmanager
     async def lifespan(app):
@@ -238,7 +242,11 @@ def create_app(
         response.headers["X-Request-ID"] = uuid.uuid4().hex
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Referrer-Policy"] = "same-origin"
+        response.headers["Referrer-Policy"] = (
+            "no-referrer"
+            if request.url.path == "/api/integrations/gmail/callback"
+            else "same-origin"
+        )
         if request.url.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
         elif request.url.path.startswith(
@@ -262,6 +270,7 @@ def create_app(
     app.include_router(billing_router(auth, sessions, config, billing_transport))
     app.include_router(intake_router(auth, sessions, config, WEB))
     app.include_router(launch_router(auth, sessions, config))
+    app.include_router(gmail_router(auth, sessions, config))
 
     def find(db, actor, id):
         item = db.get(Ticket, (actor.organization_id, id))
@@ -324,6 +333,7 @@ def create_app(
             "mode": "api",
             "registration_available": registration_available,
             "workspace_limit": config.workspace_limit,
+            "gmail_available": gmail_ready(config),
             "public_forms_available": config.public_intake_enabled
             and (
                 config.app_env != "production"
