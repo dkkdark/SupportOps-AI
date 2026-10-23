@@ -160,3 +160,15 @@ test('a failed refresh from a previous workspace does not show an error in the c
   );
   assert.equal(ui.document.querySelector('.ticket-title').textContent, 'Request B1');
 });
+
+test('request content containing HTML is rendered as text', async (t) => {
+  const payload = '<img src="x" onerror="window.injected=true">';
+  const record = ticket('A1', { customer: payload, subject: payload, message: payload });
+  const ui = await workspace(t, {
+    intercept: ({ path }) =>
+      path === '/tickets' ? [record] : path === '/tickets/A1' ? record : undefined,
+  });
+  assert.equal(ui.document.querySelector('img[src="x"]'), null);
+  assert.ok(ui.document.getElementById('app').textContent.includes(payload));
+  assert.equal(ui.window.injected, undefined);
+});

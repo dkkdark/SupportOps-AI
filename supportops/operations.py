@@ -1,6 +1,7 @@
 """Scoped operational status and account privacy controls."""
 
 from datetime import timedelta
+from argon2.exceptions import VerificationError
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
@@ -150,7 +151,7 @@ def operations_router(auth, sessions, config):
             )
             try:
                 valid = PASSWORDS.verify(user.password_hash, body.password)
-            except Exception:
+            except VerificationError:
                 valid = False
             if not valid:
                 raise HTTPException(403, "Confirm with your current password.")

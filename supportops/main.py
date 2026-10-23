@@ -188,6 +188,9 @@ def create_app(
         title="SupportOps AI · Business support platform",
         version="0.3.0",
         lifespan=lifespan,
+        docs_url=None if config.app_env == "production" else "/docs",
+        redoc_url=None if config.app_env == "production" else "/redoc",
+        openapi_url=None if config.app_env == "production" else "/openapi.json",
     )
     app.add_middleware(RequestBodyLimit)
 
@@ -234,6 +237,7 @@ def create_app(
         response = await call_next(request)
         response.headers["X-Request-ID"] = uuid.uuid4().hex
         response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "same-origin"
         if request.url.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
@@ -243,11 +247,11 @@ def create_app(
             # Assets have stable filenames, so deployments must revalidate them.
             response.headers["Cache-Control"] = "no-cache"
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'"
+            "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
         )
         if config.turnstile_site_key:
             response.headers["Content-Security-Policy"] = (
-                "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self' https://challenges.cloudflare.com; frame-ancestors 'none'; form-action 'self'"
+                "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self' https://challenges.cloudflare.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
             )
         return response
 

@@ -3,7 +3,7 @@
 import io
 import sys
 import zipfile
-import xml.etree.ElementTree as ET
+from defusedxml import ElementTree as ET
 
 
 def main():
@@ -34,9 +34,9 @@ def main():
             ):
                 raise ValueError("This Word document is too large when expanded.")
             xml = z.read("word/document.xml")
-            if b"<!DOCTYPE" in xml or b"<!ENTITY" in xml:
-                raise ValueError("Unsupported XML declarations.")
-            root = ET.fromstring(xml)
+            root = ET.fromstring(
+                xml, forbid_dtd=True, forbid_entities=True, forbid_external=True
+            )
             ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
             text = "\n\n".join(
                 "".join(p.itertext()) for p in root.findall(".//w:p", ns)

@@ -8,7 +8,6 @@ import hmac
 import re
 import secrets
 import uuid
-from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError, VerifyMismatchError
 from fastapi import (
     APIRouter,
@@ -22,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_vali
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from supportops.registration import lock as lock_registration, require_capacity
+from supportops.passwords import PASSWORDS
 from supportops.db import (
     AuditEvent,
     AuthThrottle,
@@ -35,7 +35,6 @@ from supportops.db import (
 )
 
 COOKIE = "supportops_session"
-PASSWORDS = PasswordHasher()
 DUMMY_HASH = PASSWORDS.hash(secrets.token_urlsafe(32))
 DEFAULT_TEMPLATE = "Hi {{customer_name}},\n\n{{facts}}\n\nPlease let us know if you need any further help.\nBest regards,\n{{business_name}} Support"
 

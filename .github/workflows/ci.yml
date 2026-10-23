@@ -10,6 +10,18 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install pip-audit==2.10.1 bandit==1.9.4
+      - name: Check pinned Python dependencies for known vulnerabilities
+        run: pip-audit -r requirements.lock --no-deps --disable-pip --progress-spinner off
+      - name: Scan service code for medium and high security findings
+        run: bandit -r supportops -ll -q
   checks:
     runs-on: ubuntu-latest
     services:
@@ -55,6 +67,8 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Check JavaScript dependencies for known vulnerabilities
+        run: npm audit --ignore-scripts --audit-level=moderate
       - name: Frontend regression tests and formatting
         run: npm test && npm run check:format
       - name: Validate Compose contract and build image
