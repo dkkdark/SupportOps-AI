@@ -178,7 +178,7 @@ function fail(e) {
   };
   toast(names[e.message] || e.message || 'The request could not be completed', true);
 }
-async function reload() {
+async function reload({ incomingOnly = false, canApply = () => true } = {}) {
   const workspace = workspaceToken();
   const version = ++reloadVersion;
   const [
@@ -198,24 +198,24 @@ async function reload() {
     gmail,
   ] = await Promise.all([
     request('/tickets'),
-    request('/knowledge'),
+    incomingOnly ? state.docs : request('/knowledge'),
     request('/metrics'),
-    request('/evaluation'),
-    isDemo ? [] : request('/templates'),
-    canManage() ? request('/members') : [],
-    canManage() ? request('/invitations') : [],
-    canManage() ? request('/audit') : [],
-    isDemo ? [] : request('/request-types'),
-    canManage() ? request('/intakes') : [],
-    isDemo ? [] : request('/directory'),
-    isDemo ? {} : request('/billing'),
-    isDemo ? [] : request('/plans'),
+    incomingOnly ? state.evaluation : request('/evaluation'),
+    incomingOnly ? state.templates : isDemo ? [] : request('/templates'),
+    incomingOnly ? state.members : canManage() ? request('/members') : [],
+    incomingOnly ? state.invitations : canManage() ? request('/invitations') : [],
+    incomingOnly ? state.audit : canManage() ? request('/audit') : [],
+    incomingOnly ? state.types : isDemo ? [] : request('/request-types'),
+    incomingOnly ? state.intakes : canManage() ? request('/intakes') : [],
+    incomingOnly ? state.people : isDemo ? [] : request('/directory'),
+    incomingOnly ? state.billing : isDemo ? {} : request('/billing'),
+    incomingOnly ? state.plans : isDemo ? [] : request('/plans'),
     !isDemo && canManage() ? request('/integrations/gmail') : {},
   ]).catch((error) => {
     if (workspace !== workspaceToken() || version !== reloadVersion) return [];
     throw error;
   });
-  if (workspace !== workspaceToken() || version !== reloadVersion) return false;
+  if (workspace !== workspaceToken() || version !== reloadVersion || !canApply()) return false;
   Object.assign(state, {
     tickets,
     docs,
@@ -247,13 +247,59 @@ async function reload() {
         throw error;
       })
     : null;
-  if (workspace !== workspaceToken() || version !== reloadVersion) return false;
+  if (workspace !== workspaceToken() || version !== reloadVersion || !canApply()) return false;
   if (selected === state.selected && selection === selectionVersion) {
     state.detail = detail;
     state.detailLoading = false;
     state.detailError = false;
   }
   return true;
+}
+let incomingRefresh = false;
+let incomingDirty = false;
+function canRefreshIncoming() {
+  return (
+    !isDemo &&
+    account?.organization &&
+    ['tickets', 'sources'].includes(state.page) &&
+    (!location.hash || location.hash === '#' + state.page) &&
+    document.visibilityState === 'visible' &&
+    !switchingWorkspace &&
+    !state.busy &&
+    !state.detailLoading &&
+    !$('#overlay').children.length &&
+    !document.activeElement?.matches('input, textarea, select, [contenteditable="true"]')
+  );
+}
+async function refreshIncoming() {
+  if (incomingRefresh || !canRefreshIncoming()) return;
+  incomingRefresh = true;
+  const workspace = workspaceToken();
+  const page = state.page;
+  const before = JSON.stringify([state.tickets, state.metrics, state.gmail, state.detail]);
+  try {
+    const refreshed = await reload({
+      incomingOnly: true,
+      canApply: () => state.page === page && canRefreshIncoming(),
+    });
+    if (workspace !== workspaceToken()) return;
+    incomingDirty ||=
+      before !== JSON.stringify([state.tickets, state.metrics, state.gmail, state.detail]);
+    if (refreshed && incomingDirty && state.page === page && canRefreshIncoming()) {
+      render();
+      incomingDirty = false;
+    }
+  } catch (error) {
+    // Transient background failures retry silently; an expired session follows
+    // the same sign-in flow as an explicit request.
+    if (workspace === workspaceToken()) {
+      incomingDirty ||=
+        before !== JSON.stringify([state.tickets, state.metrics, state.gmail, state.detail]);
+      if (error.status === 401) fail(error);
+    }
+  } finally {
+    incomingRefresh = false;
+  }
 }
 function sidebar() {
   return `<aside class="sidebar"><a class="brand" href="#tickets" aria-label="SupportOps AI · home"><span class="brand-mark">${icon('logo')}</span><span>SupportOps</span><em>AI</em></a><button class="workspace" data-action="switch-workspace"><span class="store-mark">${icon('leaf')}</span><div><strong>${esc(businessName())}</strong><small>${retailDemo() ? 'Sample workspace' : esc(account?.organization?.role || 'Choose workspace')}</small></div>${icon('down')}</button><p class="nav-label">WORKSPACE</p><nav data-scroll-key="workspace-nav">${[
@@ -1893,8 +1939,12 @@ window.addEventListener('hashchange', () => {
   if (pages[p]) {
     state.page = p;
     render();
+    void refreshIncoming();
   }
 });
+window.setInterval(() => void refreshIncoming(), 15000);
+window.addEventListener('focus', () => void refreshIncoming());
+document.addEventListener('visibilitychange', () => void refreshIncoming());
 function renderJoinPrompt() {
   modal(
     'Join another team',
